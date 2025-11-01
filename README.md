@@ -1,7 +1,13 @@
 # Gaia
 
-⚠ NOT PRODUCTION READY ⚠
-<small>and probably will never be</small>
+```
+                                                    | ----------------------------|
+                                                    |  ⚠ NOT PRODUCTION READY ⚠  |
+                                                    |                             |
+                                                    |  and probably will never be |
+                                                    | ----------------------------|
+```
+
 **A Smart Agriculture Cooperative Platform**
 
 Gaia is a distributed smart agriculture application designed to empower farming cooperatives. Individual farms operate autonomous nodes that contribute data and resources to a shared hub, which provides centralized services that are impractical for individual operations to manage alone. This cooperative model enables small and medium farms to access enterprise-grade agricultural intelligence and device management.
