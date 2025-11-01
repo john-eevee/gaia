@@ -47,10 +47,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Set up Elixir
-        uses: erlef/setup-beam@v1
-        with:
-          elixir-version: "1.19"
-          otp-version: "28"
+        uses: jdx/mise-action@v3
       - name: Clean to rule out incremental build as a source of flakiness
         if: github.run_attempt != '1'
         run: |
