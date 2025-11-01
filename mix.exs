@@ -6,6 +6,7 @@ defmodule Gaia.MixProject do
       apps_path: "apps",
       version: "0.1.0",
       start_permanent: Mix.env() == :prod,
+      aliases: aliases(),
       deps: deps()
     ]
   end
@@ -19,6 +20,19 @@ defmodule Gaia.MixProject do
     [
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false}
+    ]
+  end
+
+  defp aliases() do
+    [
+      ci: [
+        "deps.get",
+        "compile --warning-as-errors",
+        "test --cover",
+        "credo",
+        "format --check-formatted",
+        "deps.audit"
+      ]
     ]
   end
 end
