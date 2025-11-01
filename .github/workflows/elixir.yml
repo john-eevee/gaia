@@ -19,7 +19,7 @@ env:
 
 jobs:
   test:
-    name: Test on Elixir ${{matrix.elixir}} - OTP ${{matrix.otp}}
+    name: CI Suite
     runs-on: ubuntu-latest
 
     steps:
