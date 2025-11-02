@@ -1,8 +1,8 @@
-defmodule HubTest do
+defmodule Gaia.HubTest do
   use ExUnit.Case
-  doctest Hub
+  doctest Gaia.Hub
 
   test "greets the world" do
-    assert Hub.hello() == :world
+    assert Gaia.Hub.hello() == :world
   end
 end

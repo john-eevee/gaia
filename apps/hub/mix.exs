@@ -1,4 +1,4 @@
-defmodule Hub.MixProject do
+defmodule Gaia.Hub.MixProject do
   use Mix.Project
 
   def project do
@@ -19,7 +19,7 @@ defmodule Hub.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      mod: {Hub.Application, []}
+      mod: {Gaia.Hub.Application, []}
     ]
   end
 

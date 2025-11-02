@@ -1,6 +1,6 @@
-defmodule Hub do
+defmodule Gaia.Hub do
   @moduledoc """
-  Documentation for `Hub`.
+  Documentation for `Gaia.Hub`.
   """
 
   @doc """
@@ -8,7 +8,7 @@ defmodule Hub do
 
   ## Examples
 
-      iex> Hub.hello()
+      iex> Gaia.Hub.hello()
       :world
 
   """
