@@ -63,6 +63,9 @@ mix deps.get
 
 # Compile the project
 mix compile
+
+# Generate Hub's development certificates
+./scripts/gen_cert.sh
 ```
 
 **Thank you.**
