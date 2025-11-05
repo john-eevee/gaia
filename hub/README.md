@@ -68,14 +68,14 @@ Acts as the central certificate authority for the cooperative, managing farm nod
 
 ### Building
 
-As part of the main Gaia workspace:
-
 ```bash
-# From the workspace root
+# From the hub directory
+cd hub
+mix deps.get
 mix compile
 
-# Run tests for Hub specifically
-mix test apps/hub
+# Run tests
+mix test
 ```
 ## Integration with Farm Nodes
 

@@ -65,7 +65,7 @@ mix deps.get
 mix compile
 
 # Generate Hub's CA development certificates
-cd apps/hub && mix gen.cert
+cd hub && mix gen.cert
 ```
 
 **Thank you.**
