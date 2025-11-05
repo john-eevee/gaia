@@ -7,6 +7,9 @@ defmodule Gaia.Hub.Application do
 
   @impl true
   def start(_type, _args) do
+    # Start the Diceware dictionary
+    Gaia.Hub.Provision.Diceware.init()
+
     children = [
       # Starts a worker by calling: Hub.Worker.start_link(arg)
       # {Hub.Worker, arg}
