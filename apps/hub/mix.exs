@@ -35,6 +35,6 @@ defmodule Gaia.Hub.MixProject do
   end
 
   defp aliases() do
-    ["gen.cert": "x509.gen.suite -o priv/certs -f"]
+    ["gen.cert": "x509.gen.selfsigned"]
   end
 end
