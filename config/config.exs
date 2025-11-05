@@ -19,6 +19,6 @@ import Config
 
 config :hub,
   cacert: [
-    cert: "apps/hub/priv/certs/ca.pem",
-    key: "apps/hub/priv/certs/ca.key"
+    cert: "apps/hub/priv/cert/selfsigned.pem",
+    key: "apps/hub/priv/cert/selfsigned_key.pem"
   ]

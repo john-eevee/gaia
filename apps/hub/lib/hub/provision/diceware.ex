@@ -38,12 +38,11 @@ defmodule Gaia.Hub.Provision.Diceware do
   def generate_passphrase(word_count \\ 6) when word_count > 0 do
     word_count
     |> get_n_words()
-    |> Enum.map(fn word ->
+    |> Enum.map_join("-", fn word ->
       number = :rand.uniform(9)
       capitalized_word = String.capitalize(word)
       "#{capitalized_word}#{number}"
     end)
-    |> Enum.join("-")
   end
 
   defp get_n_words(n) do
