@@ -3,13 +3,19 @@
 # separate terms of service, privacy policy, and support
 # documentation.
 
-name: Elixir CI
+name: Hub CI
 
 on:
   push:
     branches: ["main"]
+    paths:
+      - "hub/**"
+      - ".github/workflows/elixir.yml"
   pull_request:
     branches: ["main"]
+    paths:
+      - "hub/**"
+      - ".github/workflows/elixir.yml"
 
 permissions:
   contents: read
@@ -19,18 +25,27 @@ env:
 
 jobs:
   test:
-    name: CI Suite
+    name: Hub CI Suite
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: hub
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Elixir
+        uses: jdx/mise-action@v3
+      - name: Setup hex and rebar
+        run: mix local.hex --force && mix local.rebar --force
       - name: Cache deps
         id: cache-deps
         uses: actions/cache@v4
         env:
           cache-name: cache-elixir-deps
         with:
-          path: deps
-          key: ${{ runner.os }}-mix-${{ env.cache-name }}-${{ hashFiles('**/mix.lock') }}
+          path: hub/deps
+          key: ${{ runner.os }}-mix-${{ env.cache-name }}-${{ hashFiles('hub/mix.lock') }}
           restore-keys: |
             ${{ runner.os }}-mix-${{ env.cache-name }}-
       - name: Cache compiled build
@@ -39,15 +54,11 @@ jobs:
         env:
           cache-name: cache-compiled-build
         with:
-          path: _build
-          key: ${{ runner.os }}-mix-${{ env.cache-name }}-${{ hashFiles('**/mix.lock') }}
+          path: hub/_build
+          key: ${{ runner.os }}-mix-${{ env.cache-name }}-${{ hashFiles('hub/mix.lock') }}
           restore-keys: |
             ${{ runner.os }}-mix-${{ env.cache-name }}-
             ${{ runner.os }}-mix-
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Set up Elixir
-        uses: jdx/mise-action@v3
       - name: Clean to rule out incremental build as a source of flakiness
         if: github.run_attempt != '1'
         run: |
