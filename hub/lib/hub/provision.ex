@@ -23,6 +23,7 @@ defmodule Gaia.Hub.Provision do
   The generated key is a passphrase that consists of a series of
   capitalized words and numbers, giving an easy to read and type, yet secure key.
   """
+  @spec generate_one_time_access_key() :: String.t()
   def generate_one_time_access_key() do
     provision_config = get_provision_config()
     word_count = get_passphrase_word_count(provision_config)
