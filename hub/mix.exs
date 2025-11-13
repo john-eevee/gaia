@@ -28,6 +28,7 @@ defmodule Gaia.Hub.MixProject do
   defp deps do
     [
       {:x509, "~> 0.9"},
+      {:argon2_elixir, "~> 4.0"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false}
     ]

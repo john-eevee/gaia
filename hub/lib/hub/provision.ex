@@ -9,6 +9,7 @@ defmodule Gaia.Hub.Provision do
   alias X509.Certificate.Validity
   alias X509.CSR
   alias X509.PrivateKey
+  alias Gaia.Hub.Provision.KeyHash
 
   @default_passphrase_word_count 6
 
@@ -23,11 +24,32 @@ defmodule Gaia.Hub.Provision do
   The generated key is a passphrase that consists of a series of
   capitalized words and numbers, giving an easy to read and type, yet secure key.
   """
-  @spec generate_one_time_access_key() :: String.t()
-  def generate_one_time_access_key() do
+  @spec generate_intial_provisioning_key() :: String.t()
+  def generate_intial_provisioning_key() do
     provision_config = get_provision_config()
     word_count = get_passphrase_word_count(provision_config)
     Diceware.generate_passphrase(word_count)
+  end
+
+  @doc """
+  Verifies if the provided provisioning key matches the expected key.
+  """
+  @spec provisioning_key_valid?(String.t(), String.t()) :: boolean()
+  def provisioning_key_valid?(expected_key, provided_key)
+      when is_binary(expected_key) and is_binary(provided_key) do
+    hasher = get_hasher()
+    hasher.verify(expected_key, provided_key)
+  end
+
+  @doc """
+  Returns the module responsible for hashing and verifying provisioning keys,
+  the module implements the `Gaia.Hub.Provision.KeyHash` behaviour.
+  """
+  @spec get_hasher() :: KeyHash.t()
+  def get_hasher() do
+    # For now, we only have one hasher implementation, so we return it directly.
+    # In the future, this could be made configurable.
+    KeyHash.Argon
   end
 
   @doc """
