@@ -1,70 +1,121 @@
 defmodule Gaia.Hub.Provision do
   @moduledoc """
-  Provision module to issue certificates and access keys,
-  as well as verify them for secure communications within the Hub.
-
+  Module responsible for provisioning operations such as generating
+  one-time access keys and signing certificate requests.
   """
-  alias Gaia.Hub.Provision.Diceware
 
-  @passphrase_word_count 6
+  alias Gaia.Hub.Provision.Diceware
+  alias X509.Certificate
+  alias X509.Certificate.Validity
+  alias X509.CSR
+  alias X509.PrivateKey
+
+  @default_passphrase_word_count 6
+
+  @default_key_validity_days 365
 
   # Lets say they keys are valid for a year, but we will need a renewal halfway through
   # to ensure continued security without user intervention.
-  @default_key_validity_days 365
 
   @doc """
   Generates an access key to be used as one-time access credential.
 
   The generated key is a passphrase that consists of a series of
   capitalized words and numbers, giving an easy to read and type, yet secure key.
-
   """
   def generate_one_time_access_key() do
-    Diceware.generate_passphrase(@passphrase_word_count)
+    provision_config = get_provision_config()
+    word_count = get_passphrase_word_count(provision_config)
+    Diceware.generate_passphrase(word_count)
   end
 
+  @doc """
+  Signs a certificate signing request (CSR) with the CA's private key.
+  """
+  @spec sign_certificate_request(binary()) :: {:ok, binary()} | {:error, term()}
   def sign_certificate_request(csr_pem) when is_binary(csr_pem) do
-    {ca_cert_pem, ca_key_pem} = get_ca_files()
-
-    with {:ok, csr} <- X509.CSR.from_pem(csr_pem),
-         {:ok, ca_cert} <- X509.Certificate.from_pem(ca_cert_pem),
-         {:ok, ca_key} <- X509.PrivateKey.from_pem(ca_key_pem),
-         subject <- X509.CSR.subject(csr) do
-      csr
-      |> X509.CSR.public_key()
-      |> X509.Certificate.new(subject, ca_cert, ca_key)
+    with provision_config <- get_provision_config(),
+         {:ok, ca_cert, ca_key} <- load_ca_credentials(provision_config),
+         {:ok, csr} <- parse_csr(csr_pem) do
+      create_signed_certificate(csr, ca_cert, ca_key, provision_config)
     end
   end
 
-  defp get_ca_files do
-    cacert_config = get_cacert_config()
+  defp load_ca_credentials(provision_config) do
+    with {:ok, cacert_config} <- get_cacert_config(provision_config),
+         {:ok, {ca_cert_pem, ca_key_pem}} <- get_ca_files(cacert_config),
+         {:ok, ca_cert} <- Certificate.from_pem(ca_cert_pem),
+         {:ok, ca_key} <- PrivateKey.from_pem(ca_key_pem) do
+      {:ok, ca_cert, ca_key}
+    end
+  end
 
+  defp parse_csr(csr_pem) do
+    CSR.from_pem(csr_pem)
+  end
+
+  defp create_signed_certificate(csr, ca_cert, ca_key, provision_config) do
+    validity = fn ->
+      days = get_default_key_validity_days(provision_config)
+      now = DateTime.utc_now()
+      random_drift = -1 * :rand.uniform(60)
+      not_before = DateTime.add(now, random_drift, :second)
+      not_after = DateTime.add(not_before, days, :day)
+      Validity.new(not_before, not_after)
+    end
+
+    subject = CSR.subject(csr)
+    public_key = CSR.public_key(csr)
+    cert = Certificate.new(public_key, subject, ca_cert, ca_key, validity: validity.())
+    cert_pem = Certificate.to_pem(cert)
+    {:ok, cert_pem}
+  end
+
+  defp get_ca_files(cacert_config) do
     cert_pem_file = Keyword.fetch!(cacert_config, :cert)
     key_pem_file = Keyword.fetch!(cacert_config, :key)
 
-    ca_cert_pem = File.read!(cert_pem_file)
-    ca_key_pem = File.read!(key_pem_file)
-    {ca_cert_pem, ca_key_pem}
-  end
-
-  defp get_cacert_config() do
-    config = Application.get_env(:hub, :cacert)
-
-    if is_nil(config) do
-      raise ~s(CACert configuration not found in application environment.
-
-      Please ensure that the :hub application is properly configured with the :cacert settings.
-
-      Expected configuration format:
-
-          config :hub,
-            cacert: [
-              cert: "path/to/ca_certificate.pem",
-              key: "path/to/ca_private_key.key"
-            ]
-      )
+    with {:ok, ca_cert_pem} <- File.read(cert_pem_file),
+         {:ok, ca_key_pem} <- File.read(key_pem_file) do
+      {:ok, {ca_cert_pem, ca_key_pem}}
     end
-
-    config
   end
+
+  defp get_provision_config() do
+    Application.get_env(:hub, :provision)
+  end
+
+  defp get_cacert_config(provision_config) do
+    case Keyword.get(provision_config, :cacert) do
+      nil ->
+        {:error, ~s(CACert configuration not found in application environment.
+
+Please ensure that the :hub application is properly configured with the :cacert settings.
+
+Expected configuration format:
+
+    config :hub,
+      provision: [
+        cacert: [
+          cert: "path/to/ca_certificate.pem",
+          key: "path/to/ca_private_key.key"
+        ]
+      ])}
+
+      cacert_config ->
+        {:ok, cacert_config}
+    end
+  end
+
+  defp get_passphrase_word_count(provision_config) when is_list(provision_config) do
+    Keyword.get(provision_config, :passphrase_word_count, @default_passphrase_word_count)
+  end
+
+  defp get_passphrase_word_count(_), do: @default_passphrase_word_count
+
+  defp get_default_key_validity_days(provision_config) when is_list(provision_config) do
+    Keyword.get(provision_config, :key_validity_days, @default_key_validity_days)
+  end
+
+  defp get_default_key_validity_days(_), do: @default_key_validity_days
 end
