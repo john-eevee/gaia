@@ -66,6 +66,62 @@ defmodule Gaia.Hub.ProvisionTest do
     end
   end
 
+  describe "hash_provisioning_key/1" do
+    test "returns a binary hash for a valid provisioning key" do
+      key = "test_provisioning_key"
+      hash = Provision.hash_provisioning_key(key)
+      assert is_binary(hash)
+      assert hash != key
+      assert String.starts_with?(hash, "$argon2")
+    end
+
+    test "produces different hashes for the same key" do
+      key = "test_key"
+      hash1 = Provision.hash_provisioning_key(key)
+      hash2 = Provision.hash_provisioning_key(key)
+      assert hash1 != hash2
+    end
+
+    test "raises FunctionClauseError for non-binary input" do
+      assert_raise FunctionClauseError, fn ->
+        Provision.hash_provisioning_key(123)
+      end
+    end
+  end
+
+  describe "provisioning_key_valid?/2" do
+    test "returns true when provided key matches the expected hash" do
+      key = Provision.generate_intial_provisioning_key()
+      hash = Provision.hash_provisioning_key(key)
+      assert Provision.provisioning_key_valid?(hash, key)
+    end
+
+    test "returns false when provided key does not match the expected hash" do
+      key = Provision.generate_intial_provisioning_key()
+      wrong_key = Provision.generate_intial_provisioning_key()
+      hash = Provision.hash_provisioning_key(key)
+      refute Provision.provisioning_key_valid?(hash, wrong_key)
+    end
+
+    test "returns false when expected hash is invalid" do
+      key = "password"
+      invalid_hash = "invalid_hash"
+      assert Provision.provisioning_key_valid?(invalid_hash, key) == false
+    end
+
+    test "raises FunctionClauseError for non-binary inputs" do
+      hash = Provision.hash_provisioning_key("password")
+
+      assert_raise FunctionClauseError, fn ->
+        Provision.provisioning_key_valid?(123, "password")
+      end
+
+      assert_raise FunctionClauseError, fn ->
+        Provision.provisioning_key_valid?(hash, 123)
+      end
+    end
+  end
+
   describe "sign_certificate_request/1" do
     setup do
       context = ProvisionTestHelper.setup_full_test_environment()

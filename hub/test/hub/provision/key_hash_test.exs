@@ -31,31 +31,31 @@ defmodule Gaia.Hub.Provision.KeyHash.ArgonTest do
     test "returns true when provided password matches the expected hash" do
       key = "correct_password"
       hash = Argon.hash(key)
-      assert Argon.verify(key, hash) == true
+      assert Argon.verify(hash, key) == true
     end
 
     test "returns false when provided password does not match the expected hash" do
       key = "correct_password"
       wrong_key = "wrong_password"
       hash = Argon.hash(key)
-      assert Argon.verify(wrong_key, hash) == false
+      assert Argon.verify(hash, wrong_key) == false
     end
 
     test "returns false when expected hash is invalid" do
       key = "password"
       invalid_hash = "invalid_hash"
-      assert Argon.verify(key, invalid_hash) == false
+      assert Argon.verify(invalid_hash, key) == false
     end
 
     test "raises FunctionClauseError for non-binary inputs" do
       hash = Argon.hash("password")
 
       assert_raise FunctionClauseError, fn ->
-        Argon.verify(123, hash)
+        Argon.verify(hash, 123)
       end
 
       assert_raise FunctionClauseError, fn ->
-        Argon.verify("password", 123)
+        Argon.verify(hash, 123)
       end
     end
   end

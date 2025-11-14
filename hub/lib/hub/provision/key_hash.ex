@@ -24,7 +24,7 @@ defmodule Gaia.Hub.Provision.KeyHash do
     def verify(provided_hash, expected)
         when is_binary(provided_hash) and is_binary(expected) do
       try do
-        Argon2.verify_pass(provided_hash, expected)
+        Argon2.verify_pass(expected, provided_hash)
       rescue
         ArgumentError -> false
       end

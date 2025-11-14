@@ -35,18 +35,22 @@ defmodule Gaia.Hub.Provision do
   Verifies if the provided provisioning key matches the expected key.
   """
   @spec provisioning_key_valid?(String.t(), String.t()) :: boolean()
-  def provisioning_key_valid?(expected_key, provided_key)
-      when is_binary(expected_key) and is_binary(provided_key) do
+  def provisioning_key_valid?(hash, key)
+      when is_binary(hash) and is_binary(key) do
     hasher = get_hasher()
-    hasher.verify(expected_key, provided_key)
+    hasher.verify(hash, key)
   end
 
   @doc """
-  Returns the module responsible for hashing and verifying provisioning keys,
-  the module implements the `Gaia.Hub.Provision.KeyHash` behaviour.
+  Hashes the provisioning key for secure storage.
   """
-  @spec get_hasher() :: KeyHash.t()
-  def get_hasher() do
+  @spec hash_provisioning_key(String.t()) :: String.t()
+  def hash_provisioning_key(provisioning_key) when is_binary(provisioning_key) do
+    hasher = get_hasher()
+    hasher.hash(provisioning_key)
+  end
+
+  defp get_hasher() do
     # For now, we only have one hasher implementation, so we return it directly.
     # In the future, this could be made configurable.
     KeyHash.Argon
