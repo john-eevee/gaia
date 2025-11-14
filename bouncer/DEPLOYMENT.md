@@ -5,7 +5,7 @@ This guide covers deployment options for the Bouncer OCSP server.
 ## Prerequisites
 
 - PostgreSQL 14+ database
-- Elixir 1.14+ / Erlang 25+ (for native deployment)
+- Elixir 1.19+ / Erlang 28+ (for native deployment)
 - Docker and Docker Compose (for containerized deployment)
 
 ## Database Setup
@@ -53,7 +53,7 @@ PGPASSWORD=your_secure_password psql -h localhost -U bouncer_ro -d gaia -c "SELE
 
 ```bash
 # Set environment variables
-export BOUNCER_PORT=4000
+export BOUNCER_PORT=4444
 export DB_HOST=localhost
 export DB_PORT=5432
 export DB_NAME=gaia
@@ -109,8 +109,8 @@ docker build -t bouncer:latest .
 # Run the container
 docker run -d \
   --name bouncer \
-  -p 4000:4000 \
-  -e BOUNCER_PORT=4000 \
+  -p 4444:4444 \
+  -e BOUNCER_PORT=4444 \
   -e DB_HOST=your-db-host \
   -e DB_PORT=5432 \
   -e DB_NAME=gaia \
@@ -137,14 +137,14 @@ Type=simple
 User=bouncer
 WorkingDirectory=/opt/bouncer
 Environment="MIX_ENV=prod"
-Environment="BOUNCER_PORT=4000"
+Environment="BOUNCER_PORT=4444"
 Environment="DB_HOST=localhost"
 Environment="DB_PORT=5432"
 Environment="DB_NAME=gaia"
 Environment="DB_USER=bouncer_ro"
 Environment="DB_PASSWORD=your_secure_password"
 Environment="DB_POOL_SIZE=10"
-ExecStart=/usr/local/bin/mix run --no-halt
+ExecStart=/opt/bouncer/_build/prod/rel/bouncer/bin/bouncer start
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -184,7 +184,7 @@ location /validate {
     proxy_set_header X-Client-Cert $ssl_client_cert;
     
     # Forward to Bouncer
-    proxy_pass http://bouncer:4000/validate;
+    proxy_pass http://bouncer:4444/validate;
     proxy_method POST;
     
     # Handle response
@@ -205,8 +205,8 @@ location @denied {
     RequestHeader set X-Client-Cert "%{SSL_CLIENT_CERT}e"
     
     # Forward to Bouncer
-    ProxyPass http://bouncer:4000/validate
-    ProxyPassReverse http://bouncer:4000/validate
+    ProxyPass http://bouncer:4444/validate
+    ProxyPassReverse http://bouncer:4444/validate
 </Location>
 ```
 
@@ -216,7 +216,7 @@ location @denied {
 
 ```bash
 # Simple health check
-curl http://localhost:4000/health
+curl http://localhost:4444/health
 
 # Expected output: "OK" with status 200
 ```
@@ -332,7 +332,7 @@ end
 systemctl status bouncer  # or docker ps
 
 # Check port binding
-netstat -tuln | grep 4000
+netstat -tuln | grep 4444
 
 # Check firewall
 sudo ufw status
@@ -364,9 +364,9 @@ Deploy multiple Bouncer instances behind a load balancer:
 ```nginx
 upstream bouncer_backend {
     least_conn;
-    server bouncer1:4000;
-    server bouncer2:4000;
-    server bouncer3:4000;
+    server bouncer1:4444;
+    server bouncer2:4444;
+    server bouncer3:4444;
 }
 
 server {

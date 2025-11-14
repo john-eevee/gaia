@@ -13,4 +13,4 @@ config :bouncer, :database,
   pool_size: 5
 
 # Test server configuration
-config :bouncer, port: 4001
+config :bouncer, port: 4445

@@ -24,13 +24,13 @@ docker-compose up -d
 
 This starts:
 - PostgreSQL database on port 5432
-- Bouncer server on port 4000
+- Bouncer server on port 4444
 
 ### 3. Verify It's Running
 
 ```bash
 # Health check
-curl http://localhost:4000/health
+curl http://localhost:4444/health
 
 # Expected output: OK
 ```
@@ -45,7 +45,7 @@ openssl req -x509 -newkey rsa:2048 -keyout test.key -out test.crt \
   -days 365 -nodes -subj "/CN=Test Certificate"
 
 # Test the validate endpoint
-curl -X POST http://localhost:4000/validate \
+curl -X POST http://localhost:4444/validate \
   -H "X-Client-Cert: $(cat test.crt)"
 
 # Expected: 412 (certificate not in database)
@@ -81,7 +81,7 @@ If you have Elixir installed locally:
 ### 1. Set Environment Variables
 
 ```bash
-export BOUNCER_PORT=4000
+export BOUNCER_PORT=4444
 export DB_HOST=localhost
 export DB_PORT=5432
 export DB_NAME=gaia
@@ -115,7 +115,7 @@ mix run --no-halt
 
 ```bash
 # Change the port
-export BOUNCER_PORT=4001
+export BOUNCER_PORT=4445
 docker-compose down && docker-compose up -d
 ```
 

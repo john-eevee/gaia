@@ -42,7 +42,7 @@ GRANT SELECT ON certificate_status TO bouncer_ro;
 Configuration is managed through environment variables:
 
 ### Server Configuration
-- `BOUNCER_PORT` - HTTP server port (default: 4000)
+- `BOUNCER_PORT` - HTTP server port (default: 4444)
 
 ### Database Configuration
 - `DB_HOST` - PostgreSQL hostname (default: localhost)
@@ -92,8 +92,8 @@ These events can be consumed by telemetry reporters like Prometheus, StatsD, or 
 ## Development
 
 ### Prerequisites
-- Elixir 1.14 or higher
-- Erlang/OTP 25 or higher
+- Elixir 1.19 or higher
+- Erlang/OTP 28 or higher
 - PostgreSQL 14 or higher
 
 ### Setup
@@ -133,10 +133,10 @@ mix format
 
 ```bash
 # Health check
-curl http://localhost:4000/health
+curl http://localhost:4444/health
 
 # Certificate validation (example)
-curl -X POST http://localhost:4000/validate \
+curl -X POST http://localhost:4444/validate \
   -H "X-Client-Cert: $(cat test_cert.pem)"
 ```
 
@@ -161,18 +161,17 @@ mix release
 A Docker image can be built for containerized deployment:
 
 ```dockerfile
-FROM elixir:1.14-alpine AS builder
+FROM elixir:1.19-otp-28-alpine AS builder
 WORKDIR /app
 COPY mix.exs mix.lock ./
 RUN mix deps.get --only prod
 COPY . .
-RUN mix compile
+RUN mix compile && mix release
 
-FROM elixir:1.14-alpine
+FROM alpine:3.18
 WORKDIR /app
-COPY --from=builder /app/_build/prod /app/_build/prod
-COPY --from=builder /app/config /app/config
-CMD ["mix", "run", "--no-halt"]
+COPY --from=builder /app/_build/prod/rel/bouncer ./
+CMD ["/app/bin/bouncer", "start"]
 ```
 
 ## Security Considerations

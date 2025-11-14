@@ -5,11 +5,12 @@ defmodule Gaia.Bouncer.MixProject do
     [
       app: :bouncer,
       version: "0.1.0",
-      elixir: "~> 1.14",
+      elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      aliases: aliases()
+      aliases: aliases(),
+      releases: releases()
     ]
   end
 
@@ -52,6 +53,15 @@ defmodule Gaia.Bouncer.MixProject do
         "credo",
         "format --check-formatted",
         "deps.audit"
+      ]
+    ]
+  end
+
+  defp releases do
+    [
+      bouncer: [
+        include_executables_for: [:unix],
+        applications: [runtime_tools: :permanent]
       ]
     ]
   end

@@ -4,9 +4,9 @@ services:
   bouncer:
     build: .
     ports:
-      - "4000:4000"
+      - "4444:4444"
     environment:
-      BOUNCER_PORT: 4000
+      BOUNCER_PORT: 4444
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: gaia

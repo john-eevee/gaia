@@ -1,5 +1,5 @@
 # Build stage
-FROM elixir:1.14-alpine AS builder
+FROM elixir:1.19-otp-28-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache build-base git
@@ -25,33 +25,27 @@ COPY config ./config
 COPY lib ./lib
 COPY priv ./priv
 
-# Compile the application
-RUN mix compile
+# Compile and build release
+RUN mix compile && \
+    mix release
 
 # Release stage
-FROM elixir:1.14-alpine
+FROM alpine:3.18
 
 # Install runtime dependencies
-RUN apk add --no-cache openssl ncurses-libs libstdc++
+RUN apk add --no-cache openssl ncurses-libs libstdc++ libgcc
 
 WORKDIR /app
 
-# Copy built application
-COPY --from=builder /app/_build/prod /app/_build/prod
-COPY --from=builder /app/config /app/config
-COPY --from=builder /app/deps /app/deps
-
-# Copy mix files for runtime
-COPY mix.exs mix.lock ./
-
-ENV MIX_ENV=prod
+# Copy release from builder
+COPY --from=builder /app/_build/prod/rel/bouncer ./
 
 # Expose port
-EXPOSE 4000
+EXPOSE 4444
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --quiet --tries=1 --spider http://localhost:${BOUNCER_PORT:-4000}/health || exit 1
+    CMD wget --quiet --tries=1 --spider http://localhost:${BOUNCER_PORT:-4444}/health || exit 1
 
 # Start the application
-CMD ["mix", "run", "--no-halt"]
+CMD ["/app/bin/bouncer", "start"]

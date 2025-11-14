@@ -2,7 +2,7 @@ import Config
 
 # Bouncer server configuration
 config :bouncer,
-  port: System.get_env("BOUNCER_PORT", "4000") |> String.to_integer()
+  port: System.get_env("BOUNCER_PORT", "4444") |> String.to_integer()
 
 # Database configuration
 config :bouncer, :database,
