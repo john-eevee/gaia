@@ -13,13 +13,13 @@ defmodule Gaia.Hub.Provision.KeyHash do
 
     @impl true
     def hash(key) when is_binary(key) do
-      Argon.hash_pwd_salt(key)
+      Argon2.hash_pwd_salt(key)
     end
 
     @impl true
     def verify(provided_hash, expected)
         when is_binary(provided_hash) and is_binary(expected) do
-      Argon.verify_pass(provided_hash, expected)
+      Argon2.verify_pass(provided_hash, expected)
     end
   end
 end
