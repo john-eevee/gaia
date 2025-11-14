@@ -9,6 +9,10 @@ defmodule Gaia.Hub.Provision.KeyHash do
   @callback verify(provided_hash :: String.t(), expected :: String.t()) :: boolean()
 
   defmodule Argon do
+    @moduledoc """
+    Implementation of the `Gaia.Hub.Provision.KeyHash` behaviour using Argon2.
+    The default configuration of Argon2 is to use argon2id.
+    """
     @behaviour Gaia.Hub.Provision.KeyHash
 
     @impl true
