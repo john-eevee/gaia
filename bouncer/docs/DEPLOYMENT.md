@@ -292,12 +292,16 @@ export ERL_OPTS="+A 128"
 In `lib/bouncer/application.ex`:
 
 ```elixir
-defp cowboy_options do
+defp bandit_options do
   [
     port: port(),
-    transport_options: [
-      num_acceptors: 100,      # Increase for high concurrency
-      max_connections: 16384   # Increase max connections
+    http_1_options: [
+      max_requests: :infinity,
+      max_request_line_length: 10_000,
+      max_header_length: 10_000
+    ],
+    http_2_options: [
+      max_concurrent_streams: 100
     ]
   ]
 end

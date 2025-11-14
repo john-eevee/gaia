@@ -103,7 +103,7 @@ mix credo
 ## Architecture
 
 Bouncer uses:
-- **Plug/Cowboy** for HTTP handling
+- **Plug/Bandit** for HTTP handling
 - **Postgrex** for PostgreSQL connectivity with connection pooling
 - **Telemetry** for request metrics and monitoring
 - **X509** library for certificate parsing

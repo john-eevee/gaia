@@ -32,7 +32,8 @@ defmodule Gaia.Bouncer.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:plug_cowboy, "~> 2.7"},
+      {:bandit, "~> 1.0"},
+      {:plug, "~> 1.15"},
       {:postgrex, "~> 0.17"},
       {:telemetry, "~> 1.2"},
       {:telemetry_metrics, "~> 0.6"},

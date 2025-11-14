@@ -19,7 +19,7 @@ defmodule Gaia.Bouncer.Application do
       # Database connection pool
       {Gaia.Bouncer.Database, []},
       # HTTP server
-      {Plug.Cowboy, scheme: :http, plug: Gaia.Bouncer.Router, options: cowboy_options()}
+      {Bandit, plug: Gaia.Bouncer.Router, scheme: :http, options: bandit_options()}
     ]
 
     opts = [strategy: :one_for_one, name: Gaia.Bouncer.Supervisor]
@@ -27,10 +27,9 @@ defmodule Gaia.Bouncer.Application do
     Supervisor.start_link(children, opts)
   end
 
-  defp cowboy_options do
+  defp bandit_options do
     [
-      port: port(),
-      transport_options: [num_acceptors: 10]
+      port: port()
     ]
   end
 
