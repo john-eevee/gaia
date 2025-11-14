@@ -72,8 +72,9 @@ defmodule Gaia.Bouncer.Database do
     {:reply, result, state}
   end
 
-  # Normalize status strings to atoms
-  defp normalize_status("valid"), do: :valid
-  defp normalize_status("revoked"), do: :revoked
+  # Normalize status boolean to atoms
+  # true (1) = valid, false (0) = revoked
+  defp normalize_status(true), do: :valid
+  defp normalize_status(false), do: :revoked
   defp normalize_status(_), do: :unknown
 end

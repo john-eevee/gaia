@@ -57,9 +57,9 @@ curl -X POST http://localhost:4444/validate \
 # Connect to the database
 docker-compose exec postgres psql -U postgres -d gaia
 
-# Insert a test certificate status
+# Insert a test certificate status (true = valid, false = revoked)
 INSERT INTO certificate_status (user_uuid, certificate_serial, status)
-VALUES ('550e8400-e29b-41d4-a716-446655440000', 123456789, 'valid');
+VALUES ('550e8400-e29b-41d4-a716-446655440000', 123456789, true);
 
 # Exit
 \q

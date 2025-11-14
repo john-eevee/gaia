@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS certificate_status (
     user_uuid UUID NOT NULL,
     certificate_serial BIGINT PRIMARY KEY,
-    status VARCHAR(20) NOT NULL CHECK (status IN ('valid', 'revoked')),
+    status BOOLEAN NOT NULL,  -- true (1) = valid, false (0) = revoked
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
