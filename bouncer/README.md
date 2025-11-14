@@ -2,207 +2,113 @@
 
 A lightweight, high-availability server that validates certificate status for reverse proxy authentication in the Gaia platform. Built with Elixir for exceptional concurrency and fault tolerance.
 
-## Overview
+## What is Bouncer?
 
-Bouncer serves as a certificate validation service that responds directly to the reverse proxy with HTTP status codes:
+Bouncer is a dedicated OCSP-like service that responds to reverse proxy authentication requests with:
 - `200 OK` - Certificate is valid
 - `412 Precondition Failed` - Certificate is revoked or unknown
 
-The server is optimized for low latency and high throughput, making it suitable for deployment in front of critical authentication paths.
+It queries a PostgreSQL database to check certificate status in real-time, providing sub-5ms latency with support for 10,000+ requests/second.
 
-## Architecture
+## Quick Start
 
-### Components
+### Using Docker Compose (Recommended)
 
-- **HTTP Server** - Built with Plug and Cowboy for efficient request handling
-- **Database Layer** - Postgrex connection pool with read-only database access
-- **Certificate Parser** - X.509 certificate serial extraction using the `x509` library
-- **Telemetry** - Built-in metrics for request processing time and failure tracking
+```bash
+cd bouncer
+docker-compose up -d
 
-### Database Schema
-
-The server expects a `certificate_status` table with the following structure:
-
-```sql
-CREATE TABLE certificate_status (
-    user_uuid UUID NOT NULL,
-    certificate_serial BIGINT PRIMARY KEY,
-    status VARCHAR(20) NOT NULL CHECK (status IN ('valid', 'revoked'))
-);
-
--- Create read-only user for the bouncer service
-CREATE USER bouncer_ro WITH PASSWORD 'secure_password';
-GRANT CONNECT ON DATABASE gaia TO bouncer_ro;
-GRANT USAGE ON SCHEMA public TO bouncer_ro;
-GRANT SELECT ON certificate_status TO bouncer_ro;
+# Verify it's running
+curl http://localhost:4444/health
 ```
 
-## Configuration
+This starts both Bouncer and a PostgreSQL database with the required schema.
 
-Configuration is managed through environment variables:
+### Running Locally
 
-### Server Configuration
-- `BOUNCER_PORT` - HTTP server port (default: 4444)
-
-### Database Configuration
-- `DB_HOST` - PostgreSQL hostname (default: localhost)
-- `DB_PORT` - PostgreSQL port (default: 5432)
-- `DB_NAME` - Database name (default: gaia)
-- `DB_USER` - Database username (default: bouncer_ro)
-- `DB_PASSWORD` - Database password (required in production)
-- `DB_POOL_SIZE` - Connection pool size (default: 10)
-
-## API Endpoints
-
-### Health Check
-```
-GET /health
-```
-
-Returns `200 OK` if the server is running.
-
-### Certificate Validation
-```
-POST /validate
-Headers:
-  X-Client-Cert: <PEM-encoded certificate>
-```
-
-Returns:
-- `200 OK` - Certificate is valid
-- `412 Precondition Failed` - Certificate is revoked or unknown
-- `404 Not Found` - Invalid endpoint
-
-## Telemetry
-
-The server emits telemetry events for monitoring:
-
-### Success Events
-- Event: `[:bouncer, :request, :success]`
-- Measurements: `%{duration: native_time}`
-- Metadata: `%{status: 200 | 412}`
-
-### Failure Events
-- Event: `[:bouncer, :request, :failure]`
-- Measurements: `%{duration: native_time}`
-- Metadata: `%{}`
-
-These events can be consumed by telemetry reporters like Prometheus, StatsD, or custom handlers.
-
-## Development
-
-### Prerequisites
-- Elixir 1.19 or higher
-- Erlang/OTP 28 or higher
-- PostgreSQL 14 or higher
-
-### Setup
+**Prerequisites:** Elixir 1.19+, Erlang/OTP 28+, PostgreSQL 14+
 
 ```bash
 # Install dependencies
 cd bouncer
 mix deps.get
 
-# Compile the project
-mix compile
-
-# Run tests
-mix test
+# Set environment variables
+export BOUNCER_PORT=4444
+export DB_HOST=localhost
+export DB_USER=bouncer_ro
+export DB_PASSWORD=your_password
+export DB_NAME=gaia
 
 # Run the server
 mix run --no-halt
 ```
 
-### Testing
+## Configuration
+
+Bouncer is configured via environment variables:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `BOUNCER_PORT` | HTTP server port | 4444 |
+| `DB_HOST` | PostgreSQL hostname | localhost |
+| `DB_PORT` | PostgreSQL port | 5432 |
+| `DB_NAME` | Database name | gaia |
+| `DB_USER` | Database username | bouncer_ro |
+| `DB_PASSWORD` | Database password | (required) |
+| `DB_POOL_SIZE` | Connection pool size | 10 |
+
+See `.env.example` for a complete configuration template.
+
+## API
+
+### Health Check
+```bash
+curl http://localhost:4444/health
+```
+
+### Certificate Validation
+```bash
+curl -X POST http://localhost:4444/validate \
+  -H "X-Client-Cert: $(cat certificate.pem)"
+```
+
+**Response Codes:**
+- `200` - Certificate is valid
+- `412` - Certificate is revoked or unknown
+- `404` - Invalid endpoint
+
+## Development
 
 ```bash
-# Run all tests
+# Run tests
 mix test
 
-# Run with coverage
-mix test --cover
-
-# Run linting
-mix credo
+# Run CI suite (tests, linting, formatting)
+mix ci
 
 # Format code
 mix format
+
+# Run linting
+mix credo
 ```
 
-### Manual Testing
+## Documentation
 
-```bash
-# Health check
-curl http://localhost:4444/health
+- **[Quick Start Guide](docs/QUICKSTART.md)** - Get up and running in 5 minutes
+- **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment, scaling, and operations
+- **[Contributing Guidelines](AGENTS.md)** - Best practices for developers and AI agents
 
-# Certificate validation (example)
-curl -X POST http://localhost:4444/validate \
-  -H "X-Client-Cert: $(cat test_cert.pem)"
-```
+## Architecture
 
-## Deployment
+Bouncer uses:
+- **Plug/Cowboy** for HTTP handling
+- **Postgrex** for PostgreSQL connectivity with connection pooling
+- **Telemetry** for request metrics and monitoring
+- **X509** library for certificate parsing
 
-### Production Build
-
-```bash
-# Set environment to production
-export MIX_ENV=prod
-
-# Get dependencies and compile
-mix deps.get --only prod
-mix compile
-
-# Create a release (optional)
-mix release
-```
-
-### Docker Deployment
-
-A Docker image can be built for containerized deployment:
-
-```dockerfile
-FROM elixir:1.19-otp-28-alpine AS builder
-WORKDIR /app
-COPY mix.exs mix.lock ./
-RUN mix deps.get --only prod
-COPY . .
-RUN mix compile && mix release
-
-FROM alpine:3.18
-WORKDIR /app
-COPY --from=builder /app/_build/prod/rel/bouncer ./
-CMD ["/app/bin/bouncer", "start"]
-```
-
-## Security Considerations
-
-1. **Database Access** - The server uses a dedicated read-only database user
-2. **Certificate Validation** - Only extracts serial numbers; does not perform full PKI validation
-3. **Rate Limiting** - Should be implemented at the reverse proxy level
-4. **Network Security** - Deploy behind a firewall; restrict access to authorized reverse proxies only
-
-## Monitoring
-
-Key metrics to monitor:
-
-- Request rate (requests/second)
-- Response latency (p50, p95, p99)
-- Error rate (failed validations)
-- Database connection pool utilization
-- Certificate status distribution (valid vs revoked)
-
-## Performance
-
-The server is designed for high performance:
-
-- Concurrent request handling via BEAM VM
-- Connection pooling for database queries
-- Minimal parsing overhead (serial extraction only)
-- Sub-millisecond response times (typical)
-
-Expected performance on modest hardware:
-- **Throughput**: 10,000+ requests/second
-- **Latency**: <5ms (p95)
+The server operates with a read-only database user that can only SELECT from the `certificate_status` table, ensuring minimal security exposure.
 
 ## License
 
