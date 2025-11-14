@@ -92,9 +92,7 @@ defmodule Gaia.Hub.ProvisionTestHelper do
 
     # Clean up temporary files
     if context[:temp_files] do
-      Enum.each(context.temp_files, fn file ->
-        if File.exists?(file), do: File.rm(file)
-      end)
+      Enum.each(context.temp_files, &File.rm/1)
     end
 
     :ok
@@ -113,44 +111,80 @@ defmodule Gaia.Hub.ProvisionTestHelper do
   @doc """
   Verifies that a certificate is properly signed by the CA and matches expected properties.
   """
-  def verify_signed_certificate(cert_result, expected_subject, expected_ca_subject, expected_public_key) do
+  def verify_signed_certificate(
+        cert_result,
+        expected_subject,
+        expected_ca_subject,
+        expected_public_key
+      ) do
     case cert_result do
       {:ok, cert_pem} when is_binary(cert_pem) ->
         {:ok, cert} = Certificate.from_pem(cert_pem)
-        verify_certificate_properties(cert, expected_subject, expected_ca_subject, expected_public_key)
+
+        verify_certificate_properties(
+          cert,
+          expected_subject,
+          expected_ca_subject,
+          expected_public_key
+        )
 
       {:ok, cert} ->
-        verify_certificate_properties(cert, expected_subject, expected_ca_subject, expected_public_key)
+        verify_certificate_properties(
+          cert,
+          expected_subject,
+          expected_ca_subject,
+          expected_public_key
+        )
 
       error ->
         error
     end
   end
 
-  defp verify_certificate_properties(cert, expected_subject, expected_ca_subject, expected_public_key) do
-    # Verify the certificate was signed by our CA
+  defp verify_issuer(cert, expected_ca_subject) do
     issuer_string = RDNSequence.to_string(Certificate.issuer(cert))
     expected_issuer_string = RDNSequence.to_string(expected_ca_subject)
-    
-    if issuer_string != expected_issuer_string do
-      {:error, "Certificate issuer mismatch. Expected: #{expected_issuer_string}, Got: #{issuer_string}"}
+
+    if issuer_string == expected_issuer_string do
+      :ok
     else
-      # Verify the subject matches
-      subject_string = RDNSequence.to_string(Certificate.subject(cert))
-      expected_subject_string = RDNSequence.to_string(expected_subject)
-      
-      if subject_string != expected_subject_string do
-        {:error, "Certificate subject mismatch. Expected: #{expected_subject_string}, Got: #{subject_string}"}
-      else
-        # Verify the public key matches
-        cert_public_key = Certificate.public_key(cert)
-        
-        if cert_public_key != expected_public_key do
-          {:error, "Certificate public key mismatch"}
-        else
-          {:ok, cert}
-        end
-      end
+      {:error,
+       "Certificate issuer mismatch. Expected: #{expected_issuer_string}, Got: #{issuer_string}"}
+    end
+  end
+
+  defp verify_subject(cert, expected_subject) do
+    subject_string = RDNSequence.to_string(Certificate.subject(cert))
+    expected_subject_string = RDNSequence.to_string(expected_subject)
+
+    if subject_string == expected_subject_string do
+      :ok
+    else
+      {:error,
+       "Certificate subject mismatch. Expected: #{expected_subject_string}, Got: #{subject_string}"}
+    end
+  end
+
+  defp verify_public_key(cert, expected_public_key) do
+    cert_public_key = Certificate.public_key(cert)
+
+    if cert_public_key == expected_public_key do
+      :ok
+    else
+      {:error, "Certificate public key mismatch"}
+    end
+  end
+
+  defp verify_certificate_properties(
+         cert,
+         expected_subject,
+         expected_ca_subject,
+         expected_public_key
+       ) do
+    with :ok <- verify_issuer(cert, expected_ca_subject),
+         :ok <- verify_subject(cert, expected_subject),
+         :ok <- verify_public_key(cert, expected_public_key) do
+      {:ok, cert}
     end
   end
 end
