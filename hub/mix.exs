@@ -6,6 +6,7 @@ defmodule Gaia.Hub.MixProject do
       app: :hub,
       version: "0.1.0",
       elixir: "~> 1.19",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases()
@@ -15,6 +16,9 @@ defmodule Gaia.Hub.MixProject do
   def cli do
     [preferred_envs: [ci: :test]]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 
   # Run "mix help compile.app" to learn about applications.
   def application do
@@ -28,6 +32,7 @@ defmodule Gaia.Hub.MixProject do
   defp deps do
     [
       {:x509, "~> 0.9"},
+      {:argon2_elixir, "~> 4.0"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false}
     ]
