@@ -94,7 +94,7 @@ Bouncer operates in a "fail-closed" security model:
 
 ---
 
-## 4. Elixir & Phoenix Best Practices
+## 4. Elixir & Plug Best Practices
 
 ### 1. Let It Crash
 
