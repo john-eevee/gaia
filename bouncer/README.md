@@ -15,7 +15,9 @@ It queries a PostgreSQL database to check certificate status in real-time, provi
 ### Using Docker Compose (Recommended)
 
 ```bash
-cd bouncer
+cd bouncer/deployment/docker
+cp .env.example .env
+# Edit .env with your configuration
 docker-compose up -d
 
 # Verify it's running

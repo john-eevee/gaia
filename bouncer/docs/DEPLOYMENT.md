@@ -2,11 +2,18 @@
 
 This guide covers deployment options for the Bouncer OCSP server.
 
+## Quick Links
+
+- **Docker Deployment**: See [`../deployment/docker/`](../deployment/docker/README.md)
+- **Kubernetes Deployment**: See [`../deployment/kubernetes/`](../deployment/kubernetes/README.md)
+- **Deployment Files**: All deployment configurations in [`../deployment/`](../deployment/)
+
 ## Prerequisites
 
 - PostgreSQL 14+ database
 - Elixir 1.19+ / Erlang 28+ (for native deployment)
 - Docker and Docker Compose (for containerized deployment)
+- Kubernetes cluster v1.24+ (for Kubernetes deployment)
 
 ## Database Setup
 
@@ -87,9 +94,18 @@ mix run --no-halt
 
 ### Option 2: Docker Deployment
 
+**For detailed Docker deployment instructions, see [`../deployment/docker/README.md`](../deployment/docker/README.md)**
+
 #### Using Docker Compose (Recommended for Testing)
 
 ```bash
+# Navigate to deployment directory
+cd deployment/docker
+
+# Copy and configure environment
+cp .env.example .env
+# Edit .env with your settings
+
 # Start all services (Bouncer + PostgreSQL)
 docker-compose up -d
 
@@ -103,8 +119,9 @@ docker-compose down
 #### Using Docker (Production)
 
 ```bash
-# Build the image
-docker build -t bouncer:latest .
+# Build the image from deployment directory
+cd deployment/docker
+docker build -t bouncer:latest -f Dockerfile ../..
 
 # Run the container
 docker run -d \
@@ -123,7 +140,41 @@ docker run -d \
 docker logs -f bouncer
 ```
 
-### Option 3: Systemd Service (Linux)
+### Option 3: Kubernetes Deployment
+
+**For detailed Kubernetes deployment instructions, see [`../deployment/kubernetes/README.md`](../deployment/kubernetes/README.md)**
+
+Kubernetes deployment provides high availability, auto-scaling, and zero-downtime updates.
+
+#### Quick Deploy
+
+```bash
+# Navigate to Kubernetes manifests
+cd deployment/kubernetes
+
+# Update secret.yaml with your database password
+# Update configmap.yaml with your database host
+
+# Deploy all resources
+kubectl apply -k .
+
+# Check status
+kubectl get pods -n bouncer
+kubectl get svc -n bouncer
+
+# View logs
+kubectl logs -n bouncer -l app=bouncer --tail=100 -f
+```
+
+#### Features
+
+- **High Availability**: 3+ replicas with automatic failover
+- **Auto-scaling**: HorizontalPodAutoscaler based on CPU/memory
+- **Health Checks**: Liveness and readiness probes
+- **Rolling Updates**: Zero-downtime deployments
+- **Resource Management**: CPU and memory limits/requests
+
+### Option 4: Systemd Service (Linux)
 
 Create a systemd service file at `/etc/systemd/system/bouncer.service`:
 

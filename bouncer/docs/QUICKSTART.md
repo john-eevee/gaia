@@ -13,10 +13,17 @@ This is the fastest way to get Bouncer running with a PostgreSQL database.
 ### 1. Clone and Navigate
 
 ```bash
-cd gaia/bouncer
+cd gaia/bouncer/deployment/docker
 ```
 
-### 2. Start Services
+### 2. Configure Environment
+
+```bash
+cp .env.example .env
+# Edit .env if needed (defaults work for local testing)
+```
+
+### 3. Start Services
 
 ```bash
 docker-compose up -d
