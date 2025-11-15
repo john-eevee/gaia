@@ -68,8 +68,8 @@ defmodule Gaia.Bouncer.Certificate do
   defp normalize_status(true), do: :valid
   defp normalize_status(false), do: :revoked
   defp normalize_status(_), do: :unknown
- 
-  defp get_database() do
+
+  defp get_database do
     Application.get_env(:bouncer, :database_module, Gaia.Bouncer.PostgrexDatabase)
   end
 end

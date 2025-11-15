@@ -32,7 +32,7 @@ defmodule Gaia.Bouncer.CertificateTest do
   end
 
   describe "valid?/1" do
-    defp get_serial() do
+    defp get_serial do
       :rand.uniform(100_000)
       |> Integer.to_string(16)
     end
