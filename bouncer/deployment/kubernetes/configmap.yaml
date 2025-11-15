@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bouncer-config
+  namespace: bouncer
+  labels:
+    app: bouncer
+data:
+  BOUNCER_PORT: "4444"
+  DB_HOST: "postgres-service.database.svc.cluster.local"
+  DB_PORT: "5432"
+  DB_NAME: "gaia"
+  DB_USER: "bouncer_ro"
+  DB_POOL_SIZE: "10"

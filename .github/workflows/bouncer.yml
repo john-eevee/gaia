@@ -1,0 +1,87 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: Bouncer CI
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "bouncer/**"
+      - ".github/workflows/bouncer.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "bouncer/**"
+      - ".github/workflows/bouncer.yml"
+
+permissions:
+  contents: read
+
+env:
+  MIX_ENV: test
+
+jobs:
+  test:
+    name: Bouncer CI Suite
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: bouncer
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Elixir
+        uses: jdx/mise-action@v3
+      - name: Setup hex and rebar
+        run: mix local.hex --force && mix local.rebar --force
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Create test database
+        run: PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE bouncer_test;"
+      - name: Run database migrations
+        run: PGPASSWORD=postgres psql -h localhost -U postgres -d bouncer_test -f priv/migrations/001_create_certificate_status.sql
+      - name: Cache deps
+        id: cache-deps
+        uses: actions/cache@v4
+        env:
+          cache-name: cache-elixir-deps
+        with:
+          path: bouncer/deps
+          key: ${{ runner.os }}-mix-${{ env.cache-name }}-${{ hashFiles('bouncer/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-${{ env.cache-name }}-
+      - name: Cache compiled build
+        id: cache-build
+        uses: actions/cache@v4
+        env:
+          cache-name: cache-compiled-build
+        with:
+          path: bouncer/_build
+          key: ${{ runner.os }}-mix-${{ env.cache-name }}-${{ hashFiles('bouncer/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-${{ env.cache-name }}-
+            ${{ runner.os }}-mix-
+      - name: Clean to rule out incremental build as a source of flakiness
+        if: github.run_attempt != '1'
+        run: |
+          mix deps.clean --all
+          mix clean
+        shell: sh
+      - name: Run CI
+        run: mix ci
