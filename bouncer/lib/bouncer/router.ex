@@ -8,7 +8,6 @@ defmodule Gaia.Bouncer.Router do
 
   use Plug.Router
   alias Gaia.Bouncer.Certificate
-  alias Gaia.Bouncer.Database
   require Logger
 
   plug(:match)
@@ -27,7 +26,7 @@ defmodule Gaia.Bouncer.Router do
     result =
       with {:ok, cert_pem} <- extract_certificate(conn),
            {:ok, serial} <- Certificate.parse_serial(cert_pem),
-           {:ok, status} <- Database.check_certificate_status(serial) do
+           {:ok, status} <- Certificate.valid?(serial) do
         case status do
           :valid -> {:ok, 200}
           :revoked -> {:ok, 412}
