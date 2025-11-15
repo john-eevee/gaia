@@ -1,6 +1,6 @@
 defmodule Gaia.Bouncer.RouterTest do
   use ExUnit.Case, async: true
-  use Plug.Test
+  import Plug.Test
 
   alias Gaia.Bouncer.Router
 
