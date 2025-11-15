@@ -25,17 +25,13 @@ defmodule Gaia.Bouncer.Certificate do
       {:ok, cert} ->
         serial = X509.Certificate.serial(cert)
         # Convert integer serial to uppercase hexadecimal string
-        serial_hex = Integer.to_string(serial, 16)
+        serial_hex = Integer.to_string(serial, 16) |> String.upcase()
         {:ok, serial_hex}
 
       {:error, reason} ->
         Logger.debug("Failed to parse certificate: #{inspect(reason)}")
         {:error, :invalid_certificate}
     end
-  rescue
-    e ->
-      Logger.debug("Exception parsing certificate: #{inspect(e)}")
-      {:error, :parse_error}
   end
 
   def parse_serial(_), do: {:error, :invalid_input}
