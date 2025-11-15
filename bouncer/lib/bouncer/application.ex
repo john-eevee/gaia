@@ -18,10 +18,9 @@ defmodule Gaia.Bouncer.Application do
     Telemetry.attach_handlers()
 
     children = [
-      # Database connection pool
-      {Gaia.Bouncer.Database, []},
       # HTTP server
-      {Bandit, plug: Gaia.Bouncer.Router, scheme: :http, port: port()}
+      {Bandit, plug: Gaia.Bouncer.Router, scheme: :http, port: port()},
+      {Postgrex, database_config()}
     ]
 
     opts = [strategy: :one_for_one, name: Gaia.Bouncer.Supervisor]
@@ -31,5 +30,10 @@ defmodule Gaia.Bouncer.Application do
 
   defp port do
     Application.get_env(:bouncer, :port, 4000)
+  end
+
+  defp database_config do
+    base = Application.get_env(:bouncer, :database, [])
+    Keyword.put_new(base, :name, Bouncer.Database)
   end
 end
