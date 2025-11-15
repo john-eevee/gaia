@@ -11,14 +11,46 @@ defmodule Gaia.TestingFacility.CertificateCase do
   alias X509.RDNSequence
 
   @doc """
-  Sets up a test CA environment with temporary certificates and keys.
-  Returns a context map with all necessary test data.
+  Creates a CA certificate and key pair.
   """
-  def setup_test_ca(context \\ %{}) do
+  def create_ca_certificate() do
     # Generate CA key and certificate
     ca_key = PrivateKey.new_rsa(2048)
     ca_subject = RDNSequence.new("/C=US/ST=CA/O=Test CA/CN=Test CA")
     ca_cert = Certificate.self_signed(ca_key, ca_subject, template: :root_ca)
+
+    {ca_key, ca_cert, ca_subject}
+  end
+
+  @doc """
+  Creates a signed client certificate.
+  """
+  @spec create_signed_client_certificate(
+          {PrivateKey.t(), Certificate.t(), RDNSequence.t()}
+          | nil
+        ) ::
+          {Certificate.t(), binary(), binary()}
+  def create_signed_client_certificate(root_ca \\ nil) do
+    {ca_key, ca_cert, _ca_subject} = root_ca || create_ca_certificate()
+
+    # Create client key and CSR
+    client_key = PrivateKey.new_rsa(2048)
+    client_subject = RDNSequence.new("/C=US/ST=CA/O=Test/CN=test.example.com")
+    csr = CSR.new(client_key, client_subject)
+
+    # Sign CSR with CA to create client certificate
+    cert = Certificate.new(CSR.public_key(csr), client_subject, ca_cert, ca_key)
+    pem = Certificate.to_pem(cert)
+    serial = Integer.to_string(X509.Certificate.serial(cert), 16) |> String.upcase()
+    {cert, pem, serial}
+  end
+
+  @doc """
+  Sets up a test CA environment with temporary certificates and keys.
+  Returns a context map with all necessary test data.
+  """
+  def setup_test_ca(context \\ %{}) do
+    {ca_key, ca_cert, ca_subject} = create_ca_certificate()
 
     # Create temporary directory and file paths
     temp_dir = System.tmp_dir!()
