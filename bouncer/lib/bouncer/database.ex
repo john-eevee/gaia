@@ -4,5 +4,4 @@ defmodule Gaia.Bouncer.Database do
   """
 
   @callback query(String.t(), list()) :: {:ok, any()} | {:error, any()}
-
 end
