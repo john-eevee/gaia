@@ -8,12 +8,14 @@ defmodule Gaia.Bouncer.Application do
 
   use Application
 
+  alias Gaia.Bouncer.Telemetry
+
   require Logger
 
   @impl true
   def start(_type, _args) do
     # Attach telemetry handlers
-    Gaia.Bouncer.Telemetry.attach_handlers()
+    Telemetry.attach_handlers()
 
     children = [
       # Database connection pool

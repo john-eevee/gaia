@@ -21,23 +21,21 @@ defmodule Gaia.Bouncer.Certificate do
   """
   @spec parse_serial(binary()) :: {:ok, String.t()} | {:error, atom()}
   def parse_serial(cert_pem) when is_binary(cert_pem) do
-    try do
-      case X509.Certificate.from_pem(cert_pem) do
-        {:ok, cert} ->
-          serial = X509.Certificate.serial(cert)
-          # Convert integer serial to uppercase hexadecimal string
-          serial_hex = Integer.to_string(serial, 16)
-          {:ok, serial_hex}
+    case X509.Certificate.from_pem(cert_pem) do
+      {:ok, cert} ->
+        serial = X509.Certificate.serial(cert)
+        # Convert integer serial to uppercase hexadecimal string
+        serial_hex = Integer.to_string(serial, 16)
+        {:ok, serial_hex}
 
-        {:error, reason} ->
-          Logger.debug("Failed to parse certificate: #{inspect(reason)}")
-          {:error, :invalid_certificate}
-      end
-    rescue
-      e ->
-        Logger.debug("Exception parsing certificate: #{inspect(e)}")
-        {:error, :parse_error}
+      {:error, reason} ->
+        Logger.debug("Failed to parse certificate: #{inspect(reason)}")
+        {:error, :invalid_certificate}
     end
+  rescue
+    e ->
+      Logger.debug("Exception parsing certificate: #{inspect(e)}")
+      {:error, :parse_error}
   end
 
   def parse_serial(_), do: {:error, :invalid_input}
