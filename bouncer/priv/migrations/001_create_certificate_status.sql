@@ -1,7 +1,7 @@
 -- Create the certificate_status table
 CREATE TABLE IF NOT EXISTS certificate_status (
     user_uuid UUID NOT NULL,
-    certificate_serial BIGINT PRIMARY KEY,
+    certificate_serial VARCHAR(64) PRIMARY KEY,  -- Certificate serial as hexadecimal string
     status BOOLEAN NOT NULL,  -- true (1) = valid, false (0) = revoked
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

@@ -43,7 +43,7 @@ Bouncer is completely stateless. All state is in the PostgreSQL database. This m
 -- This is the ONLY table Bouncer queries
 CREATE TABLE certificate_status (
     user_uuid UUID NOT NULL,
-    certificate_serial BIGINT PRIMARY KEY,
+    certificate_serial VARCHAR(64) PRIMARY KEY,  -- Certificate serial as hexadecimal string
     status BOOLEAN NOT NULL  -- true (1) = valid, false (0) = revoked
 );
 ```

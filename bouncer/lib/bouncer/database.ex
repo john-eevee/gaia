@@ -24,9 +24,9 @@ defmodule Gaia.Bouncer.Database do
   - `{:ok, :unknown}` if the certificate is not found
   - `{:error, reason}` on database errors
   """
-  @spec check_certificate_status(integer()) ::
+  @spec check_certificate_status(String.t()) ::
           {:ok, :valid | :revoked | :unknown} | {:error, term()}
-  def check_certificate_status(serial) when is_integer(serial) do
+  def check_certificate_status(serial) when is_binary(serial) do
     GenServer.call(__MODULE__, {:check_status, serial})
   end
 
