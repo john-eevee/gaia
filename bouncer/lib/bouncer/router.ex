@@ -12,17 +12,13 @@ defmodule Gaia.Bouncer.Router do
   plug(:match)
   plug(:dispatch)
 
-  @doc """
-  Health check endpoint.
-  """
+  # Health check endpoint
   get "/health" do
     send_resp(conn, 200, "OK")
   end
 
-  @doc """
-  Certificate validation endpoint.
-  Expects client certificate to be passed in the request headers.
-  """
+  # Certificate validation endpoint
+  # Expects client certificate to be passed in the request headers
   post "/validate" do
     start_time = System.monotonic_time()
 
@@ -64,9 +60,7 @@ defmodule Gaia.Bouncer.Router do
     end
   end
 
-  @doc """
-  Fallback for unmatched routes.
-  """
+  # Fallback for unmatched routes
   match _ do
     send_resp(conn, 404, "Not Found")
   end
