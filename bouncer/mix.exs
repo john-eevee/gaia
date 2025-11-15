@@ -52,7 +52,7 @@ defmodule Gaia.Bouncer.MixProject do
       ci: [
         "deps.get",
         "compile --warnings-as-errors",
-        "test --cover",
+        "test --cover --include ci",
         "credo",
         "format --check-formatted",
         "deps.audit"
