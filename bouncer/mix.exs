@@ -42,7 +42,8 @@ defmodule Gaia.Bouncer.MixProject do
       {:x509, "~> 0.8"},
       {:mox, "~> 1.0", only: :test},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false}
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
+      {:testing_facility, path: "../testing_facility", only: :test}
     ]
   end
 
