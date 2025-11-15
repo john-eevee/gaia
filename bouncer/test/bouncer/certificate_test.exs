@@ -33,7 +33,7 @@ defmodule Gaia.Bouncer.CertificateTest do
 
     test "parses serial for a valid certificate and returns uppercase hex" do
       # Create CA
-      {cert, cert_pem, serial} = CertificateCase.create_signed_client_certificate()
+      {cert, cert_pem, _} = CertificateCase.create_signed_client_certificate()
       {:ok, parsed_hex} = Certificate.parse_serial(cert_pem)
       expected = Integer.to_string(X509.Certificate.serial(cert), 16) |> String.upcase()
 
@@ -43,7 +43,7 @@ defmodule Gaia.Bouncer.CertificateTest do
 
   describe "valid?/1" do
     defp get_serial do
-      {cert, cert_pem, serial} = CertificateCase.create_signed_client_certificate()
+      {_, _, serial} = CertificateCase.create_signed_client_certificate()
       serial
     end
 
