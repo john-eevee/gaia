@@ -19,18 +19,12 @@ defmodule Gaia.Bouncer.Application do
       # Database connection pool
       {Gaia.Bouncer.Database, []},
       # HTTP server
-      {Bandit, plug: Gaia.Bouncer.Router, scheme: :http, options: bandit_options()}
+      {Bandit, plug: Gaia.Bouncer.Router, scheme: :http, port: port()}
     ]
 
     opts = [strategy: :one_for_one, name: Gaia.Bouncer.Supervisor]
     Logger.info("Starting Bouncer server on port #{port()}")
     Supervisor.start_link(children, opts)
-  end
-
-  defp bandit_options do
-    [
-      port: port()
-    ]
   end
 
   defp port do
