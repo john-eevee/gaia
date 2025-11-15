@@ -1,7 +1,8 @@
 defmodule Gaia.Bouncer.CertificateTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Gaia.Bouncer.Certificate
+  alias Gaia.TestingFacility.CertificateCase
 
   setup_all %{} do
     Mox.defmock(Gaia.Bouncer.DatabaseMock, for: Gaia.Bouncer.Database)
@@ -32,26 +33,7 @@ defmodule Gaia.Bouncer.CertificateTest do
 
     test "parses serial for a valid certificate and returns uppercase hex" do
       # Create CA
-      ca_key = X509.PrivateKey.new_rsa(2048)
-      ca_subject = X509.RDNSequence.new("/C=US/ST=CA/O=Test CA/CN=Test CA")
-      ca_cert = X509.Certificate.self_signed(ca_key, ca_subject, template: :root_ca)
-
-      # Create client CSR and certificate signed by CA
-      client_key = X509.PrivateKey.new_rsa(2048)
-      client_subject = X509.RDNSequence.new("/C=US/ST=CA/O=Test/CN=test.example.com")
-      csr = X509.CSR.new(client_key, client_subject)
-
-      not_before = DateTime.utc_now() |> DateTime.add(-60, :second)
-      not_after = DateTime.utc_now() |> DateTime.add(365, :day)
-      validity = X509.Certificate.Validity.new(not_before, not_after)
-
-      cert =
-        X509.Certificate.new(X509.CSR.public_key(csr), client_subject, ca_cert, ca_key,
-          validity: validity
-        )
-
-      cert_pem = X509.Certificate.to_pem(cert)
-
+      {cert, cert_pem, serial} = CertificateCase.create_signed_client_certificate()
       {:ok, parsed_hex} = Certificate.parse_serial(cert_pem)
       expected = Integer.to_string(X509.Certificate.serial(cert), 16) |> String.upcase()
 
@@ -61,8 +43,8 @@ defmodule Gaia.Bouncer.CertificateTest do
 
   describe "valid?/1" do
     defp get_serial do
-      :rand.uniform(100_000)
-      |> Integer.to_string(16)
+      {cert, cert_pem, serial} = CertificateCase.create_signed_client_certificate()
+      serial
     end
 
     test "should return unknown for unknown serial" do
