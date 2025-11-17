@@ -45,4 +45,11 @@ defmodule Gaia.Bouncer.Telemetry do
       duration_ms: duration_ms
     )
   end
+
+  def measure(fun) when is_function(fun, 0) do
+    start_time = System.monotonic_time()
+    result = fun.()
+    duration = System.monotonic_time() - start_time
+    {result, duration}
+  end
 end

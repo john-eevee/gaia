@@ -8,6 +8,7 @@ defmodule Gaia.Bouncer.Router do
 
   use Plug.Router
   alias Gaia.Bouncer.Certificate
+  alias Gaia.Bouncer.Telemetry
   require Logger
 
   plug(:match)
@@ -21,24 +22,22 @@ defmodule Gaia.Bouncer.Router do
   # Certificate validation endpoint
   # Expects client certificate to be passed in the request headers
   post "/validate" do
-    start_time = System.monotonic_time()
-
-    result =
-      with {:ok, cert_pem} <- extract_certificate(conn),
-           {:ok, serial} <- Certificate.parse_serial(cert_pem),
-           {:ok, status} <- Certificate.valid?(serial) do
-        case status do
-          :valid -> {:ok, 200}
-          :revoked -> {:ok, 412}
-          :unknown -> {:ok, 412}
+    {result, duration} =
+      Telemetry.measure(fn ->
+        with {:ok, cert_pem} <- extract_certificate(conn),
+             {:ok, serial} <- Certificate.parse_serial(cert_pem),
+             {:ok, status} <- Certificate.valid?(serial) do
+          case status do
+            :valid -> {:ok, 200}
+            :revoked -> {:ok, 412}
+            :unknown -> {:ok, 412}
+          end
+        else
+          {:error, reason} ->
+            Logger.warning("Certificate validation failed: #{inspect(reason)}")
+            {:error, 412}
         end
-      else
-        {:error, reason} ->
-          Logger.warning("Certificate validation failed: #{inspect(reason)}")
-          {:error, 412}
-      end
-
-    duration = System.monotonic_time() - start_time
+      end)
 
     case result do
       {:ok, status_code} ->
