@@ -151,14 +151,18 @@ defmodule Gaia.TestingFacility.CertificateCase do
       ) do
     case cert_result do
       {:ok, cert_pem} when is_binary(cert_pem) ->
-        {:ok, cert} = Certificate.from_pem(cert_pem)
+        case Certificate.from_pem(cert_pem) do
+          {:ok, cert} ->
+            verify_certificate_properties(
+              cert,
+              expected_subject,
+              expected_ca_subject,
+              expected_public_key
+            )
 
-        verify_certificate_properties(
-          cert,
-          expected_subject,
-          expected_ca_subject,
-          expected_public_key
-        )
+          error ->
+            error
+        end
 
       {:ok, cert} ->
         verify_certificate_properties(
