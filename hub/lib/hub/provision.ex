@@ -5,11 +5,11 @@ defmodule Gaia.Hub.Provision do
   """
 
   alias Gaia.Hub.Provision.Diceware
+  alias Gaia.Hub.Provision.KeyHash
   alias X509.Certificate
   alias X509.Certificate.Validity
   alias X509.CSR
   alias X509.PrivateKey
-  alias Gaia.Hub.Provision.KeyHash
 
   @default_passphrase_word_count 6
 
@@ -143,6 +143,4 @@ Expected configuration format:
   defp get_default_key_validity_days(provision_config) when is_list(provision_config) do
     Keyword.get(provision_config, :key_validity_days, @default_key_validity_days)
   end
-
-  defp get_default_key_validity_days(_), do: @default_key_validity_days
 end

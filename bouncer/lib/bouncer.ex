@@ -6,7 +6,6 @@ defmodule Gaia.Bouncer do
   for reverse proxy authentication. Built with Elixir, Plug, and Postgrex.
 
   ## Features
-
   - Fast certificate serial extraction and validation
   - Database-backed status checking with read-only access
   - Telemetry for request processing time and failure tracking
