@@ -143,6 +143,4 @@ Expected configuration format:
   defp get_default_key_validity_days(provision_config) when is_list(provision_config) do
     Keyword.get(provision_config, :key_validity_days, @default_key_validity_days)
   end
-
-  defp get_default_key_validity_days(_), do: @default_key_validity_days
 end
