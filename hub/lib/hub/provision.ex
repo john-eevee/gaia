@@ -5,11 +5,11 @@ defmodule Gaia.Hub.Provision do
   """
 
   alias Gaia.Hub.Provision.Diceware
+  alias Gaia.Hub.Provision.KeyHash
   alias X509.Certificate
   alias X509.Certificate.Validity
   alias X509.CSR
   alias X509.PrivateKey
-  alias Gaia.Hub.Provision.KeyHash
 
   @default_passphrase_word_count 6
 
