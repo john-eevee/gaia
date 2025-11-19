@@ -38,7 +38,8 @@ defmodule Gaia.Hub.MixProject do
       {:x509, "~> 0.9"},
       {:argon2_elixir, "~> 4.0"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false}
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
+      {:testing_facility, path: "../testing_facility", only: [:test]}
     ]
   end
 
@@ -47,7 +48,7 @@ defmodule Gaia.Hub.MixProject do
       "gen.cert": "x509.gen.selfsigned",
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
-      test: ["ecto.reset --quiet", "test"],
+      test: ["ecto.setup --quiet", "test"],
       ci: [
         "deps.get",
         "compile --warning-as-errors",
