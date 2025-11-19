@@ -58,14 +58,14 @@ cd gaia
 # Install tools
 mise install
 
-# Fetch dependencies
-mix deps.get
+# Go to the application will want to contribute
+cd src/hub
 
-# Compile the project
-mix compile
+# Get dependencies and compile
+mix do deps.get, compile
 
-# Generate Hub's CA development certificates
-cd hub && mix gen.cert
+# Use mix to check other tasks
+mix help
 ```
 
 **Thank you.**
