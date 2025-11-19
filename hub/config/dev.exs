@@ -8,7 +8,9 @@ config :hub, Gaia.Hub.Repo,
   port: 5432,
   stacktrace: true,
   show_sensitive_data_on_connection_error: true,
-  pool_size: 10
+  types: Gaia.Hub.EctoTypes,
+  pool_size: 10,
+  migration_primary_key: [type: :binary_id]
 
 # Do not include metadata nor timestamps in development logs
 config :logger, :default_formatter, format: "[$level] $message\n"

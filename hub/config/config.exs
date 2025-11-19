@@ -22,13 +22,4 @@ config :hub,
 config :hub,
   ecto_repos: [Gaia.Hub.Repo]
 
-config :hub, Repo,
-  database: "hub_dev",
-  username: "postgres",
-  password: "postgres",
-  hostname: "localhost",
-  port: 5432,
-  types: Gaia.Hub.EctoTypes,
-  migration_primary_key: [type: :binary_id]
-
 import_config "#{config_env()}.exs"

@@ -7,6 +7,7 @@ config :hub, Gaia.Hub.Repo,
   port: 5432,
   database: "hub_test#{System.get_env("MIX_TEST_PARTITION")}",
   pool: Ecto.Adapters.SQL.Sandbox,
+  types: Gaia.Hub.EctoTypes,
   pool_size: System.schedulers_online() * 2
 
 # Print only warnings and errors during test
