@@ -1,4 +1,4 @@
-defmodule Gaia.Hub.CoopIndentity.FarmMember do
+defmodule Gaia.Hub.CoopIdentity.FarmMember do
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -13,6 +13,7 @@ defmodule Gaia.Hub.CoopIndentity.FarmMember do
     timestamps()
   end
 
+  @doc false
   def changeset(farm_member, attrs) do
     farm_member
     |> cast(attrs, [:name, :business_id, :joined_at, :location, :boundaries])
