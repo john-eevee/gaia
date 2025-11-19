@@ -31,6 +31,10 @@ defmodule Gaia.Hub.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:jason, "~> 1.2"},
+      {:ecto_sql, "~> 3.13"},
+      {:postgrex, ">= 0.0.0"},
+      {:geo_postgis, "~> 3.7"},
       {:x509, "~> 0.9"},
       {:argon2_elixir, "~> 4.0"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
@@ -41,6 +45,9 @@ defmodule Gaia.Hub.MixProject do
   defp aliases() do
     [
       "gen.cert": "x509.gen.selfsigned",
+      "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
+      "ecto.reset": ["ecto.drop", "ecto.setup"],
+      test: ["ecto.reset --quiet", "test"],
       ci: [
         "deps.get",
         "compile --warning-as-errors",
