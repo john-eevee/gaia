@@ -18,3 +18,8 @@ config :hub,
     cert: "priv/cert/selfsigned.pem",
     key: "priv/cert/selfsigned_key.pem"
   ]
+
+config :hub,
+  ecto_repos: [Gaia.Hub.Repo]
+
+import_config "#{config_env()}.exs"

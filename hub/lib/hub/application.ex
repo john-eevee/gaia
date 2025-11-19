@@ -11,8 +11,7 @@ defmodule Gaia.Hub.Application do
     Gaia.Hub.Provision.Diceware.init()
 
     children = [
-      # Starts a worker by calling: Hub.Worker.start_link(arg)
-      # {Hub.Worker, arg}
+      Gaia.Hub.Repo
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

@@ -2,7 +2,7 @@ defmodule Gaia.Hub.ProvisionTest do
   use ExUnit.Case
 
   alias Gaia.Hub.Provision
-  alias Gaia.Hub.ProvisionTestHelper
+  alias Gaia.TestingFacility.CertificateCase
   alias X509.{Certificate, CSR, PrivateKey, PublicKey, RDNSequence}
 
   setup_all do
@@ -124,17 +124,17 @@ defmodule Gaia.Hub.ProvisionTest do
 
   describe "sign_certificate_request/1" do
     setup do
-      context = ProvisionTestHelper.setup_full_test_environment()
+      context = CertificateCase.setup_full_test_environment()
 
       on_exit(fn ->
-        ProvisionTestHelper.cleanup_test_environment(context)
+        CertificateCase.cleanup_test_environment(context)
       end)
 
       {:ok, context}
     end
 
     test "successfully signs a valid CSR and returns a PEM certificate", %{ca_subject: ca_subject} do
-      csr_data = ProvisionTestHelper.create_test_csr()
+      csr_data = CertificateCase.create_test_csr()
 
       result = Provision.sign_certificate_request(csr_data.client_csr_pem)
 
@@ -147,7 +147,7 @@ defmodule Gaia.Hub.ProvisionTest do
       expected_public_key = PublicKey.derive(csr_data.client_key)
 
       assert {:ok, _cert} =
-               ProvisionTestHelper.verify_signed_certificate(
+               CertificateCase.verify_signed_certificate(
                  result,
                  csr_data.client_subject,
                  ca_subject,
@@ -157,7 +157,7 @@ defmodule Gaia.Hub.ProvisionTest do
 
     test "signs CSR with custom subject", %{ca_subject: ca_subject} do
       custom_subject = RDNSequence.new("/C=UK/ST=London/O=Custom Org/CN=custom.example.com")
-      csr_data = ProvisionTestHelper.create_test_csr(custom_subject)
+      csr_data = CertificateCase.create_test_csr(custom_subject)
 
       result = Provision.sign_certificate_request(csr_data.client_csr_pem)
 
@@ -166,7 +166,7 @@ defmodule Gaia.Hub.ProvisionTest do
       expected_public_key = PublicKey.derive(csr_data.client_key)
 
       assert {:ok, _cert} =
-               ProvisionTestHelper.verify_signed_certificate(
+               CertificateCase.verify_signed_certificate(
                  result,
                  custom_subject,
                  ca_subject,
@@ -196,7 +196,7 @@ defmodule Gaia.Hub.ProvisionTest do
 
     test "returns error when CA certificate file does not exist" do
       # Create CSR first
-      csr_data = ProvisionTestHelper.create_test_csr()
+      csr_data = CertificateCase.create_test_csr()
 
       # Set invalid CA certificate path
       Application.put_env(:hub, :provision,
@@ -212,7 +212,7 @@ defmodule Gaia.Hub.ProvisionTest do
     end
 
     test "returns error when cacert configuration is missing" do
-      csr_data = ProvisionTestHelper.create_test_csr()
+      csr_data = CertificateCase.create_test_csr()
 
       # Remove cacert configuration
       Application.put_env(:hub, :provision, [])
@@ -233,7 +233,7 @@ defmodule Gaia.Hub.ProvisionTest do
         key_validity_days: 30
       )
 
-      csr_data = ProvisionTestHelper.create_test_csr()
+      csr_data = CertificateCase.create_test_csr()
 
       result = Provision.sign_certificate_request(csr_data.client_csr_pem)
 
@@ -250,10 +250,10 @@ defmodule Gaia.Hub.ProvisionTest do
 
   describe "certificate signing with different key types" do
     setup do
-      context = ProvisionTestHelper.setup_full_test_environment()
+      context = CertificateCase.setup_full_test_environment()
 
       on_exit(fn ->
-        ProvisionTestHelper.cleanup_test_environment(context)
+        CertificateCase.cleanup_test_environment(context)
       end)
 
       {:ok, context}
@@ -273,7 +273,7 @@ defmodule Gaia.Hub.ProvisionTest do
       expected_public_key = PublicKey.derive(client_key)
 
       assert {:ok, _cert} =
-               ProvisionTestHelper.verify_signed_certificate(
+               CertificateCase.verify_signed_certificate(
                  result,
                  client_subject,
                  ca_subject,

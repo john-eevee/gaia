@@ -21,7 +21,8 @@ defmodule TestingFacility.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:x509, "~> 0.9"}
+      {:x509, "~> 0.9"},
+      {:ecto, "~> 3.13"}
     ]
   end
 end
