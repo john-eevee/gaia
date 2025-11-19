@@ -32,6 +32,10 @@ defmodule Gaia.Bouncer.Certificate do
         Logger.debug("Failed to parse certificate: #{inspect(reason)}")
         {:error, :invalid_certificate}
     end
+  rescue
+    e ->
+      Logger.debug("Exception parsing certificate: #{inspect(e)}")
+      {:error, :parse_error}
   end
 
   def parse_serial(_), do: {:error, :invalid_input}

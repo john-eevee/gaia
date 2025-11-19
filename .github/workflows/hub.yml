@@ -9,13 +9,13 @@ on:
   push:
     branches: ["main"]
     paths:
-      - "hub/**"
-      - ".github/workflows/elixir.yml"
+      - "src/hub/**"
+      - ".github/workflows/hub.yml"
   pull_request:
     branches: ["main"]
     paths:
-      - "hub/**"
-      - ".github/workflows/elixir.yml"
+      - "src/hub/**"
+      - ".github/workflows/hub.yml"
 
 permissions:
   contents: read
@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: hub
+        working-directory: src/hub
 
     steps:
       - name: Checkout code
@@ -44,8 +44,8 @@ jobs:
         env:
           cache-name: cache-elixir-deps
         with:
-          path: hub/deps
-          key: ${{ runner.os }}-mix-${{ env.cache-name }}-${{ hashFiles('hub/mix.lock') }}
+          path: src/hub/deps
+          key: ${{ runner.os }}-mix-${{ env.cache-name }}-${{ hashFiles('src/hub/mix.lock') }}
           restore-keys: |
             ${{ runner.os }}-mix-${{ env.cache-name }}-
       - name: Cache compiled build
@@ -54,8 +54,8 @@ jobs:
         env:
           cache-name: cache-compiled-build
         with:
-          path: hub/_build
-          key: ${{ runner.os }}-mix-${{ env.cache-name }}-${{ hashFiles('hub/mix.lock') }}
+          path: src/hub/_build
+          key: ${{ runner.os }}-mix-${{ env.cache-name }}-${{ hashFiles('src/hub/mix.lock') }}
           restore-keys: |
             ${{ runner.os }}-mix-${{ env.cache-name }}-
             ${{ runner.os }}-mix-
