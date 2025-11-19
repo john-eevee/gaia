@@ -1,7 +1,6 @@
-defmodule TestingFacility.ChangesetsTest do
+defmodule Gaia.TestingFacility.ChangesetsTest do
   use ExUnit.Case, async: true
-  alias TestingFacility.Changesets
-
+  alias Gaia.TestingFacility.Changesets
 
   test "should return the errors of an invalid changeset as a map" do
     import Ecto.Changeset
@@ -22,5 +21,4 @@ defmodule TestingFacility.ChangesetsTest do
              age: ["is invalid"]
            }
   end
-
 end

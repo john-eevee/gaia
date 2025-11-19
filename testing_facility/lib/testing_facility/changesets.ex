@@ -1,4 +1,4 @@
-defmodule TestingFacility.Changesets do
+defmodule Gaia.TestingFacility.Changesets do
   def errors_on(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
       Enum.reduce(opts, msg, fn {key, value}, acc ->
