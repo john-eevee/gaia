@@ -1,4 +1,6 @@
 defmodule Gaia.Hub.CoopIdentity.FarmMemberFixtures do
+  @moduledoc false
+
   def valid_farm_member_attrs do
     %{
       name: "Sunny Acres Farm",

@@ -25,7 +25,7 @@ defmodule Gaia.Hub.Provision do
   capitalized words and numbers, giving an easy to read and type, yet secure key.
   """
   @spec generate_intial_provisioning_key() :: String.t()
-  def generate_intial_provisioning_key() do
+  def generate_intial_provisioning_key do
     provision_config = get_provision_config()
     word_count = get_passphrase_word_count(provision_config)
     Diceware.generate_passphrase(word_count)
@@ -50,7 +50,7 @@ defmodule Gaia.Hub.Provision do
     hasher.hash(provisioning_key)
   end
 
-  defp get_hasher() do
+  defp get_hasher do
     # For now, we only have one hasher implementation, so we return it directly.
     # In the future, this could be made configurable.
     KeyHash.Argon
@@ -108,7 +108,7 @@ defmodule Gaia.Hub.Provision do
     end
   end
 
-  defp get_provision_config() do
+  defp get_provision_config do
     Application.get_env(:hub, :provision)
   end
 
