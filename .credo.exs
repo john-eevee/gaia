@@ -1,9 +1,8 @@
-# This file contains the configuration for Credo and you are probably reading
-# this after creating it with `mix credo.gen.config`.
-#
-# If you find anything wrong or unclear in this file, please report an
-# issue on GitHub: https://github.com/rrrene/credo/issues
-#
+# This file contains the configuration for Credo.
+# When running Credo from one of the applications, it will look up the filesystem
+# tree and merge all `.credo.exs` files it finds along the way.
+# So this file will be used when running Credo from any of the applications
+# inside the `src/` folder.
 %{
   #
   # You can have as many configs as you like in the `configs:` field.

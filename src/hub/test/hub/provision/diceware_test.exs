@@ -1,5 +1,6 @@
 defmodule Gaia.Hub.Provision.DicewareTest do
   use ExUnit.Case
+  alias Gaia.Hub.Provision.Diceware
 
   setup_all do
     # Seed random for predictable tests
@@ -16,17 +17,17 @@ defmodule Gaia.Hub.Provision.DicewareTest do
     end
 
     test "raises exception when called twice" do
-      assert_raise Gaia.Hub.Provision.Diceware.DicewareException,
+      assert_raise Diceware.DicewareException,
                    "Diceware dictionary already initialized, do not call init/0 twice.",
                    fn ->
-                     Gaia.Hub.Provision.Diceware.init()
+                     Diceware.init()
                    end
     end
   end
 
   describe "generate_passphrase/1" do
     test "with default word count" do
-      passphrase = Gaia.Hub.Provision.Diceware.generate_passphrase()
+      passphrase = Diceware.generate_passphrase()
       words = String.split(passphrase, "-")
       assert length(words) == 6
 
@@ -36,7 +37,7 @@ defmodule Gaia.Hub.Provision.DicewareTest do
     end
 
     test "with custom word count" do
-      passphrase = Gaia.Hub.Provision.Diceware.generate_passphrase(4)
+      passphrase = Diceware.generate_passphrase(4)
       words = String.split(passphrase, "-")
       assert length(words) == 4
 
@@ -47,11 +48,11 @@ defmodule Gaia.Hub.Provision.DicewareTest do
 
     test "raises error for invalid word count" do
       assert_raise FunctionClauseError, fn ->
-        Gaia.Hub.Provision.Diceware.generate_passphrase(0)
+        Diceware.generate_passphrase(0)
       end
 
       assert_raise FunctionClauseError, fn ->
-        Gaia.Hub.Provision.Diceware.generate_passphrase(-1)
+        Diceware.generate_passphrase(-1)
       end
     end
   end

@@ -1,4 +1,7 @@
 defmodule Gaia.Hub.CoopIdentity.FarmMember do
+  @moduledoc """
+  Schema representing a farm member in the cooperative identity system.
+  """
   use Ecto.Schema
   import Ecto.Changeset
 

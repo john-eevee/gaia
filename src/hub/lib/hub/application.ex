@@ -5,10 +5,11 @@ defmodule Gaia.Hub.Application do
 
   use Application
 
-  @impl true
+  alias Gaia.Hub.Provision.Diceware
+
   def start(_type, _args) do
     # Start the Diceware dictionary
-    Gaia.Hub.Provision.Diceware.init()
+    Diceware.init()
 
     children = [
       Gaia.Hub.Repo
