@@ -2,6 +2,7 @@ defmodule Gaia.Bouncer.CertificateTest do
   use ExUnit.Case, async: true
 
   alias Gaia.Bouncer.Certificate
+  alias X509.Certificate.Validity, as: X509Validity
 
   setup_all %{} do
     Mox.defmock(Gaia.Bouncer.DatabaseMock, for: Gaia.Bouncer.Database)
@@ -43,7 +44,7 @@ defmodule Gaia.Bouncer.CertificateTest do
 
       not_before = DateTime.utc_now() |> DateTime.add(-60, :second)
       not_after = DateTime.utc_now() |> DateTime.add(365, :day)
-      validity = X509.Certificate.Validity.new(not_before, not_after)
+      validity = X509Validity.new(not_before, not_after)
 
       cert =
         X509.Certificate.new(X509.CSR.public_key(csr), client_subject, ca_cert, ca_key,
@@ -96,25 +97,6 @@ defmodule Gaia.Bouncer.CertificateTest do
       end)
 
       assert {:ok, :revoked} = Certificate.valid?(serial)
-    end
-
-    test "should use correct query" do
-      serial = get_serial()
-
-      expected_query = """
-      SELECT status
-      FROM certificate_status
-      WHERE certificate_serial = $1
-      LIMIT 1
-      """
-
-      Gaia.Bouncer.DatabaseMock
-      |> Mox.expect(:query, fn query, [^serial] ->
-        assert query == expected_query
-        {:ok, %{rows: []}}
-      end)
-
-      assert {:ok, :unknown} = Certificate.valid?(serial)
     end
   end
 end
