@@ -5,6 +5,17 @@ defmodule Gaia.Hub.CoopIdentity.FarmMember do
   use Ecto.Schema
   import Ecto.Changeset
 
+  @type t() :: %__MODULE__{
+          id: Ecto.UUID.t(),
+          name: String.t(),
+          business_id: String.t(),
+          joined_at: DateTime.t(),
+          location: Geo.PostGIS.Geometry.t(),
+          boundaries: Geo.PostGIS.Geometry.t() | nil,
+          inserted_at: DateTime.t(),
+          updated_at: DateTime.t()
+        }
+
   @primary_key {:id, :binary_id, autogenerate: true}
   schema "farm_members" do
     field(:name, :string)
