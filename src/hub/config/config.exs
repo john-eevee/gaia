@@ -22,4 +22,6 @@ config :hub,
 config :hub,
   ecto_repos: [Gaia.Hub.Repo]
 
+config :geo_postgis, json_library: Jason
+
 import_config "#{config_env()}.exs"
