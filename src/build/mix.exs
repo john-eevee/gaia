@@ -32,12 +32,12 @@ defmodule Gaia.Build.Mix do
   end
   """
   def apply(opts) do
-    app = Keyword.pop!(opts, :app)
-    version = Keyword.pop!(opts, :version)
-    deps = Keyword.pop(opts, :deps, [])
-    aliases = Keyword.pop(opts, :aliases, [])
-    compilers = Keyword.pop(opts, :compilers, [])
-    elixirc_paths = Keyword.pop(opts, :elixirc_paths, [])
+    app = Keyword.fetch!(opts, :app)
+    version = Keyword.fetch!(opts, :version)
+    deps = Keyword.get(opts, :deps, [])
+    aliases = Keyword.get(opts, :aliases, [])
+    compilers = Keyword.get(opts, :compilers, [])
+    elixirc_paths = Keyword.get(opts, :elixirc_paths, [])
 
     combined = [
       app: app,
@@ -51,7 +51,7 @@ defmodule Gaia.Build.Mix do
       dialyzer: [plt_add_apps: [:mix, :ex_unit, :eex]]
     ]
 
-    Keyword.merge(opts, combined)
+    Keyword.merge(opts, combined) |> IO.inspect(label: "Mix Project Configuration")
   end
 
   defp elixir_version, do: "~> 1.19"
