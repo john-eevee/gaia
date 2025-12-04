@@ -17,15 +17,28 @@ defmodule Gaia.Hub.CoopIdentity.Farmer do
 
   alias Gaia.Hub.CoopIdentity.FarmMember
 
+  @type roles() :: :owner | :staff | :admin
+
+  @type t() :: %__MODULE__{
+          id: Ecto.UUID.t(),
+          email: String.t(),
+          first_name: String.t(),
+          last_name: String.t(),
+          role: roles(),
+          farm_member_id: Ecto.UUID.t(),
+          inserted_at: DateTime.t(),
+          updated_at: DateTime.t()
+        }
+
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
   schema "farmers" do
-    field :email, :string
-    field :first_name, :string
-    field :last_name, :string
-    field :role, Ecto.Enum, values: [:owner, :staff, :admin]
+    field(:email, :string)
+    field(:first_name, :string)
+    field(:last_name, :string)
+    field(:role, Ecto.Enum, values: [:owner, :staff, :admin])
 
-    belongs_to :farm_member, FarmMember
+    belongs_to(:farm_member, FarmMember)
 
     timestamps()
   end
