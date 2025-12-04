@@ -47,14 +47,12 @@ defmodule Gaia.Hub.CoopIdentity do
     %FarmMember{}
     |> FarmMember.changeset(attrs)
     |> Repo.insert()
-    |> then(fn
+    |> tap(fn
       {:ok, farm_member} ->
         Logger.info("Registered new farm member with ID #{farm_member.id}")
-        {:ok, farm_member}
 
       {:error, changeset} ->
         Logger.error("Failed to register farm member: #{inspect(changeset)}")
-        {:error, changeset}
     end)
   end
 end
