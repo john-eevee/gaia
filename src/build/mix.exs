@@ -39,7 +39,7 @@ defmodule Gaia.Build.Mix do
     compilers = Keyword.get(opts, :compilers, [])
     elixirc_paths = Keyword.get(opts, :elixirc_paths, [])
 
-    [
+    combined = [
       app: app,
       version: version,
       elixir: elixir_version(),
@@ -50,6 +50,8 @@ defmodule Gaia.Build.Mix do
       elixirc_paths: elixirc_paths(Mix.env()) ++ elixirc_paths,
       dialyzer: [plt_add_apps: [:mix, :ex_unit, :eex]]
     ]
+
+    Keyword.merge(opts, combined) |> IO.inspect(label: "Mix Project Configuration")
   end
 
   defp elixir_version, do: "~> 1.19"

@@ -10,7 +10,14 @@ defmodule Gaia.Hub.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      aliases: aliases()
+      aliases: aliases(),
+      test_coverage: [
+        ignore_modules: [
+          Gaia.Hub.Application,
+          Gaia.Hub.Repo,
+          Gaia.Hub.EctoTypes
+        ]
+      ]
     ]
     |> Gaia.Build.Mix.apply()
   end
