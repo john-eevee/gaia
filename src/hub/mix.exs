@@ -15,7 +15,8 @@ defmodule Gaia.Hub.MixProject do
         ignore_modules: [
           Gaia.Hub.Application,
           Gaia.Hub.Repo,
-          Gaia.Hub.EctoTypes
+          Gaia.Hub.EctoTypes,
+          ~r"\.*Fixtures"
         ]
       ]
     ]
