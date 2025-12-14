@@ -67,21 +67,18 @@ defmodule Gaia.Hub.CoopIdentity do
       DataSharingPolicy.changeset(%DataSharingPolicy{}, %{farm_member_id: farm_member.id})
     end)
     |> Repo.transaction()
-    |> case do
+    |> then(fn
       {:ok, %{farm_member: farm_member}} ->
+        Logger.info(
+          "Registered new farm member with ID #{farm_member.id} and default data sharing policy (all disabled)"
+        )
+
         {:ok, farm_member}
-        |> tap(fn _ ->
-          Logger.info(
-            "Registered new farm member with ID #{farm_member.id} and default data sharing policy (all disabled)"
-          )
-        end)
 
       {:error, _failed_operation, changeset, _changes_so_far} ->
+        Logger.error("Failed to register farm member: #{inspect(changeset)}")
         {:error, changeset}
-        |> tap(fn _ ->
-          Logger.error("Failed to register farm member: #{inspect(changeset)}")
-        end)
-    end
+    end)
   end
 
   @spec register_farmer(register_farmer_attrs()) ::
@@ -136,19 +133,32 @@ defmodule Gaia.Hub.CoopIdentity do
   def toggle_data_sharing_policy(farm_member_id, attrs) do
     case Repo.get_by(DataSharingPolicy, farm_member_id: farm_member_id) do
       nil ->
-        Logger.warning("Attempted to toggle policy for non-existent farm member #{farm_member_id}")
+        Logger.warning(
+          "Attempted to toggle policy for non-existent farm member #{farm_member_id}"
+        )
+
         {:error, :not_found}
 
       policy ->
-        old_values = Map.take(policy, [:share_anonymous_soil_data, :share_pest_sightings, :share_yield_data])
+        old_values =
+          Map.take(policy, [:share_anonymous_soil_data, :share_pest_sightings, :share_yield_data])
 
         policy
         |> DataSharingPolicy.changeset(attrs)
         |> Repo.update()
         |> tap(fn
           {:ok, updated_policy} ->
-            new_values = Map.take(updated_policy, [:share_anonymous_soil_data, :share_pest_sightings, :share_yield_data])
-            changes = for {key, new_val} <- new_values, Map.get(old_values, key) != new_val, do: {key, Map.get(old_values, key), new_val}
+            new_values =
+              Map.take(updated_policy, [
+                :share_anonymous_soil_data,
+                :share_pest_sightings,
+                :share_yield_data
+              ])
+
+            changes =
+              for {key, new_val} <- new_values,
+                  Map.get(old_values, key) != new_val,
+                  do: {key, Map.get(old_values, key), new_val}
 
             if changes != [] do
               Logger.info(
@@ -160,7 +170,9 @@ defmodule Gaia.Hub.CoopIdentity do
             end
 
           {:error, changeset} ->
-            Logger.error("Failed to update data sharing policy for farm member #{farm_member_id}: #{inspect(changeset)}")
+            Logger.error(
+              "Failed to update data sharing policy for farm member #{farm_member_id}: #{inspect(changeset)}"
+            )
         end)
     end
   end
