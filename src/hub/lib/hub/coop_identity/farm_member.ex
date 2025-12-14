@@ -5,6 +5,8 @@ defmodule Gaia.Hub.CoopIdentity.FarmMember do
   use Ecto.Schema
   import Ecto.Changeset
 
+  alias Gaia.Hub.CoopIdentity.DataSharingPolicy
+
   @type t() :: %__MODULE__{
           id: Ecto.UUID.t(),
           name: String.t(),
@@ -17,12 +19,15 @@ defmodule Gaia.Hub.CoopIdentity.FarmMember do
         }
 
   @primary_key {:id, :binary_id, autogenerate: true}
+  @foreign_key_type :binary_id
   schema "farm_members" do
     field(:name, :string)
     field(:business_id, :string)
     field(:joined_at, :utc_datetime_usec)
     field(:location, Geo.PostGIS.Geometry)
     field(:boundaries, Geo.PostGIS.Geometry)
+
+    has_one(:data_sharing_policy, DataSharingPolicy)
 
     timestamps()
   end
