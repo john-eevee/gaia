@@ -16,7 +16,9 @@ defmodule Gaia.Hub.CoopIdentity do
   alias Gaia.Hub.CoopIdentity.FarmMember
   alias Gaia.Hub.CoopIdentity.Farmer
   alias Gaia.Hub.CoopIdentity.DataSharingPolicy
+  alias Gaia.Hub.CoopIdentity.InitialProvisioningKey
   alias Gaia.Hub.Repo
+  alias Gaia.Hub.Provision
   require Logger
 
   @typedoc """
@@ -48,7 +50,33 @@ defmodule Gaia.Hub.CoopIdentity do
           required(:first_name) => String.t(),
           required(:last_name) => String.t(),
           required(:role) => Farmer.roles(),
-          required(:farm_member_id) => uuid()
+          required(:farm_member_id) => uuid(),
+          optional(:password_hash) => String.t(),
+          optional(:must_change_password) => boolean()
+        }
+
+  @typedoc """
+  Attributes for adding a new farm member (admin operation).
+  """
+  @type add_farm_member_attrs() :: %{
+          required(:farm_name) => String.t(),
+          required(:business_id) => String.t(),
+          required(:location) => geo_json(),
+          optional(:boundaries) => geo_json(),
+          required(:farmer_email) => String.t(),
+          required(:farmer_first_name) => String.t(),
+          required(:farmer_last_name) => String.t(),
+          required(:farmer_role) => Farmer.roles()
+        }
+
+  @typedoc """
+  Result of adding a new farm member with provisioning credentials.
+  """
+  @type add_farm_member_result() :: %{
+          farm_member: FarmMember.t(),
+          farmer: Farmer.t(),
+          provisioning_key: String.t(),
+          disposable_password: String.t()
         }
 
   @doc """
@@ -154,6 +182,120 @@ defmodule Gaia.Hub.CoopIdentity do
               "Failed to update data sharing policy for farm member #{farm_member_id}: #{inspect(changeset)}"
             )
         end)
+    end
+  end
+
+  @doc """
+  Adds a new farm member to the cooperative (admin operation).
+
+  This is a comprehensive operation that performs the following:
+  1. Registers a new farm member in the cooperative
+  2. Creates a data sharing policy (all sharing disabled by default)
+  3. Generates a secure, single-use provisioning key for the farm node
+  4. Creates a farmer account with a disposable password
+  5. Marks the farmer to change their password on first login
+
+  ## Parameters
+
+    * `attrs` - A map containing farm and farmer details
+
+  ## Returns
+
+    * `{:ok, result}` - A map containing:
+      - `:farm_member` - The created FarmMember
+      - `:farmer` - The created Farmer
+      - `:provisioning_key` - The plaintext provisioning key (only shown once)
+      - `:disposable_password` - The plaintext disposable password (only shown once)
+    * `{:error, changeset}` - Validation errors
+
+  ## Examples
+
+      iex> add_new_farm_member(%{
+      ...>   farm_name: "Green Valley Farm",
+      ...>   business_id: "GVF123",
+      ...>   location: %Geo.Point{coordinates: {-80.191790, 25.761680}, srid: 4326},
+      ...>   farmer_email: "john@greenvalley.com",
+      ...>   farmer_first_name: "John",
+      ...>   farmer_last_name: "Smith",
+      ...>   farmer_role: :owner
+      ...> })
+      {:ok, %{
+        farm_member: %FarmMember{},
+        farmer: %Farmer{},
+        provisioning_key: "Tractor5-Harvest3-...",
+        disposable_password: "Seed8-Plant2-..."
+      }}
+
+  ## Important
+
+  The provisioning key and disposable password are only returned once and must be
+  securely communicated to the farm member. The keys are stored as hashes and
+  cannot be recovered.
+  """
+  @spec add_new_farm_member(add_farm_member_attrs()) ::
+          {:ok, add_farm_member_result()} | {:error, Ecto.Changeset.t()}
+  def add_new_farm_member(attrs) do
+    # Generate provisioning key and disposable password
+    provisioning_key = Provision.generate_intial_provisioning_key()
+    disposable_password = Provision.generate_intial_provisioning_key()
+
+    # Hash the keys for storage
+    provisioning_key_hash = Provision.hash_provisioning_key(provisioning_key)
+    password_hash = Provision.hash_provisioning_key(disposable_password)
+
+    # Set key expiration (30 days from now)
+    expires_at = DateTime.add(DateTime.utc_now(), 30, :day)
+
+    farm_attrs = %{
+      name: attrs.farm_name,
+      business_id: attrs.business_id,
+      joined_at: DateTime.utc_now(),
+      location: attrs.location,
+      boundaries: Map.get(attrs, :boundaries)
+    }
+
+    Ecto.Multi.new()
+    |> Ecto.Multi.insert(:farm_member, FarmMember.changeset(%FarmMember{}, farm_attrs))
+    |> Ecto.Multi.insert(:data_sharing_policy, fn %{farm_member: farm_member} ->
+      DataSharingPolicy.changeset(%DataSharingPolicy{}, %{farm_member_id: farm_member.id})
+    end)
+    |> Ecto.Multi.insert(:provisioning_key, fn %{farm_member: farm_member} ->
+      InitialProvisioningKey.changeset(%InitialProvisioningKey{}, %{
+        key_hash: provisioning_key_hash,
+        expires_at: expires_at,
+        farm_member_id: farm_member.id
+      })
+    end)
+    |> Ecto.Multi.insert(:farmer, fn %{farm_member: farm_member} ->
+      Farmer.changeset(%Farmer{}, %{
+        email: attrs.farmer_email,
+        first_name: attrs.farmer_first_name,
+        last_name: attrs.farmer_last_name,
+        role: attrs.farmer_role,
+        farm_member_id: farm_member.id,
+        password_hash: password_hash,
+        must_change_password: true
+      })
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{farm_member: farm_member, farmer: farmer}} ->
+        Logger.info(
+          "Added new farm member #{farm_member.id} with farmer #{farmer.id}. " <>
+            "Provisioning key and disposable password generated."
+        )
+
+        {:ok,
+         %{
+           farm_member: farm_member,
+           farmer: farmer,
+           provisioning_key: provisioning_key,
+           disposable_password: disposable_password
+         }}
+
+      {:error, _failed_operation, changeset, _changes_so_far} ->
+        Logger.error("Failed to add new farm member: #{inspect(changeset)}")
+        {:error, changeset}
     end
   end
 
