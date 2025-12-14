@@ -13,7 +13,7 @@ defmodule Gaia.Hub.CoopIdentity do
   within the cooperative identity system. Enabling
   """
 
-  alias Gaia.Hub.CoopIdentity.FarmMember
+  alias Gaia.Hub.CoopIdentity.Farm
   alias Gaia.Hub.CoopIdentity.Farmer
   alias Gaia.Hub.CoopIdentity.DataSharingPolicy
   alias Gaia.Hub.CoopIdentity.InitialProvisioningKey
@@ -32,7 +32,7 @@ defmodule Gaia.Hub.CoopIdentity do
   """
   @type uuid() :: String.t()
   @typedoc """
-    Attributes acknowledged to register a new farm member.
+    Attributes acknowledged to register a new farm.
   """
   @type register_farm_attrs() :: %{
           required(:name) => String.t(),
@@ -50,15 +50,15 @@ defmodule Gaia.Hub.CoopIdentity do
           required(:first_name) => String.t(),
           required(:last_name) => String.t(),
           required(:role) => Farmer.roles(),
-          required(:farm_member_id) => uuid(),
+          required(:farm_id) => uuid(),
           optional(:password_hash) => String.t(),
           optional(:must_change_password) => boolean()
         }
 
   @typedoc """
-  Attributes for adding a new farm member (admin operation).
+  Attributes for adding a new farm (admin operation).
   """
-  @type add_farm_member_attrs() :: %{
+  @type add_farm_attrs() :: %{
           required(:farm_name) => String.t(),
           required(:business_id) => String.t(),
           required(:location) => geo_json(),
@@ -70,10 +70,10 @@ defmodule Gaia.Hub.CoopIdentity do
         }
 
   @typedoc """
-  Result of adding a new farm member with provisioning credentials.
+  Result of adding a new farm with provisioning credentials.
   """
-  @type add_farm_member_result() :: %{
-          farm_member: FarmMember.t(),
+  @type add_farm_result() :: %{
+          farm: Farm.t(),
           farmer: Farmer.t(),
           provisioning_key: String.t(),
           disposable_password: String.t()
@@ -82,28 +82,28 @@ defmodule Gaia.Hub.CoopIdentity do
   @doc """
   Registers a new farm in the cooperative.
 
-  Creates a FarmMember and its associated DataSharingPolicy with all
+  Creates a Farm and its associated DataSharingPolicy with all
   sharing options set to false by default.
   """
   @spec register_farm(register_farm_attrs()) ::
-          {:ok, FarmMember.t()} | {:error, Ecto.Changeset.t()}
+          {:ok, Farm.t()} | {:error, Ecto.Changeset.t()}
   def register_farm(attrs) do
     Ecto.Multi.new()
-    |> Ecto.Multi.insert(:farm_member, FarmMember.changeset(%FarmMember{}, attrs))
-    |> Ecto.Multi.insert(:data_sharing_policy, fn %{farm_member: farm_member} ->
-      DataSharingPolicy.changeset(%DataSharingPolicy{}, %{farm_member_id: farm_member.id})
+    |> Ecto.Multi.insert(:farm, Farm.changeset(%Farm{}, attrs))
+    |> Ecto.Multi.insert(:data_sharing_policy, fn %{farm: farm} ->
+      DataSharingPolicy.changeset(%DataSharingPolicy{}, %{farm_id: farm.id})
     end)
     |> Repo.transaction()
     |> then(fn
-      {:ok, %{farm_member: farm_member}} ->
+      {:ok, %{farm: farm}} ->
         Logger.info(
-          "Registered new farm member with ID #{farm_member.id} and default data sharing policy (all disabled)"
+          "Registered new farm with ID #{farm.id} and default data sharing policy (all disabled)"
         )
 
-        {:ok, farm_member}
+        {:ok, farm}
 
       {:error, _failed_operation, changeset, _changes_so_far} ->
-        Logger.error("Failed to register farm member: #{inspect(changeset)}")
+        Logger.error("Failed to register farm: #{inspect(changeset)}")
         {:error, changeset}
     end)
   end
@@ -116,7 +116,7 @@ defmodule Gaia.Hub.CoopIdentity do
     |> Repo.insert()
     |> tap(fn
       {:ok, farmer} ->
-        Logger.info("Registered new farmer with ID #{farmer.id} on farm #{farmer.farm_member_id}")
+        Logger.info("Registered new farmer with ID #{farmer.id} on farm #{farmer.farm_id}")
 
       {:error, changeset} ->
         Logger.error("Failed to register farmer: #{inspect(changeset)}")
@@ -133,21 +133,21 @@ defmodule Gaia.Hub.CoopIdentity do
         }
 
   @doc """
-  Toggles data sharing policy settings for a farm member.
+  Toggles data sharing policy settings for a farm.
 
   This function allows updating one or more data sharing preferences
-  for a farm member. All changes are logged for audit purposes.
+  for a farm. All changes are logged for audit purposes.
 
   ## Parameters
 
-    * `farm_member_id` - The UUID of the farm member
+    * `farm_id` - The UUID of the farm
     * `attrs` - A map of policy fields to update
 
   ## Returns
 
     * `{:ok, data_sharing_policy}` - Updated policy
     * `{:error, changeset}` - Validation errors
-    * `{:error, :not_found}` - Farm member or policy not found
+    * `{:error, :not_found}` - Farm or policy not found
 
   ## Examples
 
@@ -157,11 +157,11 @@ defmodule Gaia.Hub.CoopIdentity do
   """
   @spec toggle_data_sharing_policy(uuid(), toggle_policy_attrs()) ::
           {:ok, DataSharingPolicy.t()} | {:error, Ecto.Changeset.t()} | {:error, :not_found}
-  def toggle_data_sharing_policy(farm_member_id, attrs) do
-    case Repo.get_by(DataSharingPolicy, farm_member_id: farm_member_id) do
+  def toggle_data_sharing_policy(farm_id, attrs) do
+    case Repo.get_by(DataSharingPolicy, farm_id: farm_id) do
       nil ->
         Logger.warning(
-          "Attempted to toggle policy for non-existent farm member #{farm_member_id}"
+          "Attempted to toggle policy for non-existent farm #{farm_id}"
         )
 
         {:error, :not_found}
@@ -175,21 +175,21 @@ defmodule Gaia.Hub.CoopIdentity do
         |> Repo.update()
         |> tap(fn
           {:ok, updated_policy} ->
-            log_changes(updated_policy, old_values, farm_member_id)
+            log_changes(updated_policy, old_values, farm_id)
 
           {:error, changeset} ->
             Logger.error(
-              "Failed to update data sharing policy for farm member #{farm_member_id}: #{inspect(changeset)}"
+              "Failed to update data sharing policy for farm #{farm_id}: #{inspect(changeset)}"
             )
         end)
     end
   end
 
   @doc """
-  Adds a new farm member to the cooperative (admin operation).
+  Adds a new farm to the cooperative (admin operation).
 
   This is a comprehensive operation that performs the following:
-  1. Registers a new farm member in the cooperative
+  1. Registers a new farm in the cooperative
   2. Creates a data sharing policy (all sharing disabled by default)
   3. Generates a secure, single-use provisioning key for the farm node
   4. Creates a farmer account with a disposable password
@@ -202,7 +202,7 @@ defmodule Gaia.Hub.CoopIdentity do
   ## Returns
 
     * `{:ok, result}` - A map containing:
-      - `:farm_member` - The created FarmMember
+      - `:farm` - The created Farm
       - `:farmer` - The created Farmer
       - `:provisioning_key` - The plaintext provisioning key (only shown once)
       - `:disposable_password` - The plaintext disposable password (only shown once)
@@ -210,7 +210,7 @@ defmodule Gaia.Hub.CoopIdentity do
 
   ## Examples
 
-      iex> add_new_farm_member(%{
+      iex> add_new_farm(%{
       ...>   farm_name: "Green Valley Farm",
       ...>   business_id: "GVF123",
       ...>   location: %Geo.Point{coordinates: {-80.191790, 25.761680}, srid: 4326},
@@ -220,7 +220,7 @@ defmodule Gaia.Hub.CoopIdentity do
       ...>   farmer_role: :owner
       ...> })
       {:ok, %{
-        farm_member: %FarmMember{},
+        farm: %Farm{},
         farmer: %Farmer{},
         provisioning_key: "Tractor5-Harvest3-...",
         disposable_password: "Seed8-Plant2-..."
@@ -229,12 +229,12 @@ defmodule Gaia.Hub.CoopIdentity do
   ## Important
 
   The provisioning key and disposable password are only returned once and must be
-  securely communicated to the farm member. The keys are stored as hashes and
+  securely communicated to the farm. The keys are stored as hashes and
   cannot be recovered.
   """
-  @spec add_new_farm_member(add_farm_member_attrs()) ::
-          {:ok, add_farm_member_result()} | {:error, Ecto.Changeset.t()}
-  def add_new_farm_member(attrs) do
+  @spec add_new_farm(add_farm_attrs()) ::
+          {:ok, add_farm_result()} | {:error, Ecto.Changeset.t()}
+  def add_new_farm(attrs) do
     # Generate provisioning key and disposable password
     provisioning_key = Provision.generate_intial_provisioning_key()
     disposable_password = Provision.generate_intial_provisioning_key()
@@ -255,51 +255,51 @@ defmodule Gaia.Hub.CoopIdentity do
     }
 
     Ecto.Multi.new()
-    |> Ecto.Multi.insert(:farm_member, FarmMember.changeset(%FarmMember{}, farm_attrs))
-    |> Ecto.Multi.insert(:data_sharing_policy, fn %{farm_member: farm_member} ->
-      DataSharingPolicy.changeset(%DataSharingPolicy{}, %{farm_member_id: farm_member.id})
+    |> Ecto.Multi.insert(:farm, Farm.changeset(%Farm{}, farm_attrs))
+    |> Ecto.Multi.insert(:data_sharing_policy, fn %{farm: farm} ->
+      DataSharingPolicy.changeset(%DataSharingPolicy{}, %{farm_id: farm.id})
     end)
-    |> Ecto.Multi.insert(:provisioning_key, fn %{farm_member: farm_member} ->
+    |> Ecto.Multi.insert(:provisioning_key, fn %{farm: farm} ->
       InitialProvisioningKey.changeset(%InitialProvisioningKey{}, %{
         key_hash: provisioning_key_hash,
         expires_at: expires_at,
-        farm_member_id: farm_member.id
+        farm_id: farm.id
       })
     end)
-    |> Ecto.Multi.insert(:farmer, fn %{farm_member: farm_member} ->
+    |> Ecto.Multi.insert(:farmer, fn %{farm: farm} ->
       Farmer.changeset(%Farmer{}, %{
         email: attrs.farmer_email,
         first_name: attrs.farmer_first_name,
         last_name: attrs.farmer_last_name,
         role: attrs.farmer_role,
-        farm_member_id: farm_member.id,
+        farm_id: farm.id,
         password_hash: password_hash,
         must_change_password: true
       })
     end)
     |> Repo.transaction()
     |> case do
-      {:ok, %{farm_member: farm_member, farmer: farmer}} ->
+      {:ok, %{farm: farm, farmer: farmer}} ->
         Logger.info(
-          "Added new farm member #{farm_member.id} with farmer #{farmer.id}. " <>
+          "Added new farm #{farm.id} with farmer #{farmer.id}. " <>
             "Provisioning key and disposable password generated."
         )
 
         {:ok,
          %{
-           farm_member: farm_member,
+           farm: farm,
            farmer: farmer,
            provisioning_key: provisioning_key,
            disposable_password: disposable_password
          }}
 
       {:error, _failed_operation, changeset, _changes_so_far} ->
-        Logger.error("Failed to add new farm member: #{inspect(changeset)}")
+        Logger.error("Failed to add new farm: #{inspect(changeset)}")
         {:error, changeset}
     end
   end
 
-  defp log_changes(updated_policy, old_values, farm_member_id) do
+  defp log_changes(updated_policy, old_values, farm_id) do
     new_values =
       Map.take(updated_policy, [
         :share_anonymous_soil_data,
@@ -314,7 +314,7 @@ defmodule Gaia.Hub.CoopIdentity do
 
     if changes != [] do
       Logger.info(
-        "Data sharing policy updated for farm member #{farm_member_id}: " <>
+        "Data sharing policy updated for farm #{farm_id}: " <>
           Enum.map_join(changes, ", ", fn {field, old_val, new_val} ->
             "#{field} changed from #{old_val} to #{new_val}"
           end)

@@ -4,7 +4,7 @@ defmodule Gaia.Hub.CoopIdentity.FarmerTest do
   alias Gaia.Hub.Repo
   alias Gaia.Hub.CoopIdentity.Farmer
   alias Gaia.Hub.CoopIdentity
-  import Gaia.Hub.CoopIdentity.FarmMemberFixtures
+  import Gaia.Hub.CoopIdentity.FarmFixtures
   import Gaia.TestingFacility.Changesets
 
   setup tags do
@@ -15,18 +15,18 @@ defmodule Gaia.Hub.CoopIdentity.FarmerTest do
 
   describe "changeset/2" do
     setup do
-      attrs = valid_farm_member_attrs()
-      {:ok, farm_member} = CoopIdentity.register_farm(attrs)
-      %{farm_member: farm_member}
+      attrs = valid_farm_attrs()
+      {:ok, farm} = CoopIdentity.register_farm(attrs)
+      %{farm: farm}
     end
 
-    test "valid attributes", %{farm_member: farm_member} do
+    test "valid attributes", %{farm: farm} do
       attrs = %{
         email: "farmer@example.com",
         first_name: "John",
         last_name: "Doe",
         role: :owner,
-        farm_member_id: farm_member.id
+        farm_id: farm.id
       }
 
       changeset = Farmer.changeset(%Farmer{}, attrs)
@@ -39,7 +39,7 @@ defmodule Gaia.Hub.CoopIdentity.FarmerTest do
         first_name: nil,
         last_name: nil,
         role: nil,
-        farm_member_id: nil
+        farm_id: nil
       }
 
       changeset = Farmer.changeset(%Farmer{}, attrs)
@@ -48,16 +48,16 @@ defmodule Gaia.Hub.CoopIdentity.FarmerTest do
       assert "can't be blank" in errors_on(changeset).first_name
       assert "can't be blank" in errors_on(changeset).last_name
       assert "can't be blank" in errors_on(changeset).role
-      assert "can't be blank" in errors_on(changeset).farm_member_id
+      assert "can't be blank" in errors_on(changeset).farm_id
     end
 
-    test "invalid role", %{farm_member: farm_member} do
+    test "invalid role", %{farm: farm} do
       attrs = %{
         email: "farmer@example.com",
         first_name: "John",
         last_name: "Doe",
         role: :invalid_role,
-        farm_member_id: farm_member.id
+        farm_id: farm.id
       }
 
       changeset = Farmer.changeset(%Farmer{}, attrs)
@@ -65,13 +65,13 @@ defmodule Gaia.Hub.CoopIdentity.FarmerTest do
       assert "is invalid" in errors_on(changeset).role
     end
 
-    test "unique email constraint", %{farm_member: farm_member} do
+    test "unique email constraint", %{farm: farm} do
       attrs = %{
         email: "farmer@example.com",
         first_name: "John",
         last_name: "Doe",
         role: :owner,
-        farm_member_id: farm_member.id
+        farm_id: farm.id
       }
 
       {:ok, _farmer} =
@@ -93,7 +93,7 @@ defmodule Gaia.Hub.CoopIdentity.FarmerTest do
         first_name: "John",
         last_name: "Doe",
         role: :owner,
-        farm_member_id: Ecto.UUID.generate()
+        farm_id: Ecto.UUID.generate()
       }
 
       assert {:error, changeset} =
@@ -101,7 +101,7 @@ defmodule Gaia.Hub.CoopIdentity.FarmerTest do
                |> Farmer.changeset(attrs)
                |> Repo.insert()
 
-      assert "does not exist" in errors_on(changeset).farm_member_id
+      assert "does not exist" in errors_on(changeset).farm_id
     end
   end
 end
