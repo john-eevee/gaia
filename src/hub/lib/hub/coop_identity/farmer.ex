@@ -50,5 +50,6 @@ defmodule Gaia.Hub.CoopIdentity.Farmer do
     |> validate_required([:email, :first_name, :last_name, :role, :farm_member_id])
     |> validate_format(:email, ~r/^[^\s]+@[^\s]+$/, message: "must have the @ sign and no spaces")
     |> unique_constraint(:email)
+    |> foreign_key_constraint(:farm_member_id)
   end
 end
