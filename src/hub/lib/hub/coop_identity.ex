@@ -2,7 +2,7 @@ defmodule Gaia.Hub.CoopIdentity do
   @moduledoc """
   The CoopIdentity context.
 
-  The principal application service responsivble for delegating and managing
+  The principal application service responsible for delegating and managing
   low level operations into a use cases exposed to clients. This includes
   managing farm member identities, their credentials, and associated metadata.
 
