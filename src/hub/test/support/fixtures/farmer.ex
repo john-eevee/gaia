@@ -1,8 +1,5 @@
 defmodule Gaia.Hub.CoopIdentity.FarmerFixtures do
-  @moduledoc """
-  This module defines test helpers for creating
-  entities via the `Gaia.Hub.CoopIdentity` context.
-  """
+  @moduledoc false
 
   @doc """
   Generate valid attributes for a farmer.
