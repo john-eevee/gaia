@@ -24,7 +24,6 @@ defmodule Gaia.Hub.Repo.Migrations.CreateFarmer do
     create unique_index(:farmers, [:email])
   end
 
-
   def down do
     drop table(:farmers)
     execute("DROP TYPE farmer_role;")
