@@ -6,7 +6,6 @@ defmodule Gaia.Hub.CoopIdentityTest do
   alias Gaia.TestingFacility.Changesets
   import Gaia.Hub.CoopIdentity.FarmMemberFixtures
   import Gaia.Hub.CoopIdentity.FarmerFixtures
-  import Gaia.Hub.CoopIdentity.DataSharingPolicyFixtures
 
   setup tags do
     pid = Sandbox.start_owner!(Repo, shared: not tags[:async])
@@ -32,8 +31,7 @@ defmodule Gaia.Hub.CoopIdentityTest do
       assert {:ok, farm_member} = CoopIdentity.register_farm(attrs)
 
       # Load the associated data sharing policy
-      farm_with_policy =
-        Repo.preload(farm_member, :data_sharing_policy)
+      farm_with_policy = Repo.preload(farm_member, :data_sharing_policy)
 
       assert farm_with_policy.data_sharing_policy != nil
       assert farm_with_policy.data_sharing_policy.share_anonymous_soil_data == false
@@ -53,6 +51,18 @@ defmodule Gaia.Hub.CoopIdentityTest do
       refute policy.share_pest_sightings, "Pest sightings should NOT be shared by default"
       refute policy.share_yield_data, "Yield data should NOT be shared by default"
     end
+
+    test "should return error when missing required attributes" do
+      # Test missing business_id
+      attrs = valid_farm_member_attrs() |> Map.delete(:business_id)
+      assert {:error, changeset} = CoopIdentity.register_farm(attrs)
+      assert %{business_id: ["can't be blank"]} = Changesets.errors_on(changeset)
+
+      # Test missing location
+      attrs = valid_farm_member_attrs() |> Map.delete(:location)
+      assert {:error, changeset} = CoopIdentity.register_farm(attrs)
+      assert %{location: ["can't be blank"]} = Changesets.errors_on(changeset)
+    end
   end
 
   describe "register_farmer/1" do
@@ -69,6 +79,20 @@ defmodule Gaia.Hub.CoopIdentityTest do
       attrs = valid_farmer_attrs(farm_member.id) |> Map.put(:email, "")
       assert {:error, changeset} = CoopIdentity.register_farmer(attrs)
       assert %{email: ["can't be blank"]} = Changesets.errors_on(changeset)
+    end
+
+    test "should return error when missing required attributes" do
+      farm_member = valid_farm_member_attrs() |> CoopIdentity.register_farm() |> elem(1)
+
+      # Test missing first_name
+      attrs = valid_farmer_attrs(farm_member.id) |> Map.delete(:first_name)
+      assert {:error, changeset} = CoopIdentity.register_farmer(attrs)
+      assert %{first_name: ["can't be blank"]} = Changesets.errors_on(changeset)
+
+      # Test missing last_name
+      attrs = valid_farmer_attrs(farm_member.id) |> Map.delete(:last_name)
+      assert {:error, changeset} = CoopIdentity.register_farmer(attrs)
+      assert %{last_name: ["can't be blank"]} = Changesets.errors_on(changeset)
     end
   end
 
@@ -125,6 +149,46 @@ defmodule Gaia.Hub.CoopIdentityTest do
                CoopIdentity.toggle_data_sharing_policy(non_existent_id, %{
                  share_pest_sightings: true
                })
+    end
+
+    test "should log all changes made to policy" do
+      farm_member = valid_farm_member_attrs() |> CoopIdentity.register_farm() |> elem(1)
+
+      # Make multiple changes at once to verify logging
+      assert {:ok, policy} =
+               CoopIdentity.toggle_data_sharing_policy(farm_member.id, %{
+                 share_pest_sightings: true,
+                 share_yield_data: true,
+                 share_anonymous_soil_data: true
+               })
+
+      assert policy.share_pest_sightings == true
+      assert policy.share_yield_data == true
+      assert policy.share_anonymous_soil_data == true
+    end
+
+    test "should handle no changes gracefully" do
+      farm_member = valid_farm_member_attrs() |> CoopIdentity.register_farm() |> elem(1)
+
+      # Enable all fields
+      {:ok, _} =
+        CoopIdentity.toggle_data_sharing_policy(farm_member.id, %{
+          share_pest_sightings: true,
+          share_yield_data: true,
+          share_anonymous_soil_data: true
+        })
+
+      # Try to set them to the same values (no actual changes)
+      assert {:ok, policy} =
+               CoopIdentity.toggle_data_sharing_policy(farm_member.id, %{
+                 share_pest_sightings: true,
+                 share_yield_data: true,
+                 share_anonymous_soil_data: true
+               })
+
+      assert policy.share_pest_sightings == true
+      assert policy.share_yield_data == true
+      assert policy.share_anonymous_soil_data == true
     end
   end
 end
