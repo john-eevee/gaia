@@ -14,6 +14,7 @@ defmodule Gaia.Hub.CoopIdentity do
   """
 
   alias Gaia.Hub.CoopIdentity.FarmMember
+  alias Gaia.Hub.CoopIdentity.Farmer
   alias Gaia.Hub.Repo
   require Logger
 
@@ -38,6 +39,17 @@ defmodule Gaia.Hub.CoopIdentity do
           optional(:boundaries) => geo_json()
         }
 
+  @typedoc """
+  Attributes acknowledged to register a new farmer.
+  """
+  @type register_farmer_attrs() :: %{
+          required(:email) => String.t(),
+          required(:first_name) => String.t(),
+          required(:last_name) => String.t(),
+          required(:role) => Farmer.roles(),
+          required(:farm_member_id) => uuid()
+        }
+
   @doc """
   Registers a new farm in the cooperative.
   """
@@ -53,6 +65,21 @@ defmodule Gaia.Hub.CoopIdentity do
 
       {:error, changeset} ->
         Logger.error("Failed to register farm member: #{inspect(changeset)}")
+    end)
+  end
+
+  @spec register_farmer(register_farmer_attrs()) ::
+          {:ok, Farmer.t()} | {:error, Ecto.Changeset.t()}
+  def register_farmer(attrs) do
+    %Farmer{}
+    |> Farmer.changeset(attrs)
+    |> Repo.insert()
+    |> tap(fn
+      {:ok, farmer} ->
+        Logger.info("Registered new farmer with ID #{farmer.id} on farm #{farmer.farm_member_id}")
+
+      {:error, changeset} ->
+        Logger.error("Failed to register farmer: #{inspect(changeset)}")
     end)
   end
 end
