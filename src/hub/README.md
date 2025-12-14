@@ -57,11 +57,30 @@ Handles collective market operations and supply chain coordination.
 Acts as the central certificate authority for the cooperative, managing farm node onboarding and access control.
 
 **Core Concepts:**
+- **FarmMember** - Represents a legal business entity or physical farm registered in the cooperative
+- **Farmer** - Human users who manage and operate farms, with specific roles (owner, admin, staff)
+- **InitialProvisioningKey** - Secure, single-use key for onboarding new farm nodes
 - **FarmNodeProvisioning** - Onboarding process for new member farms
 - **Certificate** - Cryptographic credentials authorizing farm nodes to access the system
 - **NodeRegistration** - Verification and validation of known and trustworthy parties
 - **AccessControl** - Policy enforcement ensuring only authorized nodes can participate
 - **CertificateLifecycle** - Issuance, renewal, and revocation of node credentials
+
+#### Farm Member Onboarding
+
+The Hub provides a secure onboarding workflow for adding new farm members:
+
+1. **Admin Creates Member**: An administrator calls `CoopIdentity.add_new_farm_member/1` with farm and farmer details
+2. **Automatic Setup**: The system atomically:
+   - Registers the farm member
+   - Creates a data sharing policy (all sharing disabled by default)
+   - Generates a secure, single-use provisioning key (expires in 30 days)
+   - Creates a farmer account with a disposable password
+3. **Credential Distribution**: Admin receives plaintext credentials (shown only once) to securely communicate to the farm member
+4. **Node Provisioning**: Farm uses the provisioning key to obtain an mTLS certificate from the Hub
+5. **First Login**: Farmer logs in with disposable password and must change it immediately
+
+For detailed information, see [Farm Member Onboarding Documentation](docs/farm-member-onboarding.md).
 
 ## Development
 
