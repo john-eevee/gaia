@@ -21,7 +21,10 @@ defmodule Gaia.Hub.CoopIdentity.InitialProvisioningKeyTest do
       attrs = valid_initial_provisioning_key_attrs(farm_member.id)
 
       changeset =
-        InitialProvisioningKey.changeset(%InitialProvisioningKey{}, Map.drop(attrs, [:plaintext_key]))
+        InitialProvisioningKey.changeset(
+          %InitialProvisioningKey{},
+          Map.drop(attrs, [:plaintext_key])
+        )
 
       assert changeset.valid?
     end
@@ -34,7 +37,10 @@ defmodule Gaia.Hub.CoopIdentity.InitialProvisioningKeyTest do
         |> Map.delete(:key_hash)
 
       changeset =
-        InitialProvisioningKey.changeset(%InitialProvisioningKey{}, Map.drop(attrs, [:plaintext_key]))
+        InitialProvisioningKey.changeset(
+          %InitialProvisioningKey{},
+          Map.drop(attrs, [:plaintext_key])
+        )
 
       refute changeset.valid?
       assert %{key_hash: ["can't be blank"]} = Changesets.errors_on(changeset)
@@ -48,7 +54,10 @@ defmodule Gaia.Hub.CoopIdentity.InitialProvisioningKeyTest do
         |> Map.delete(:expires_at)
 
       changeset =
-        InitialProvisioningKey.changeset(%InitialProvisioningKey{}, Map.drop(attrs, [:plaintext_key]))
+        InitialProvisioningKey.changeset(
+          %InitialProvisioningKey{},
+          Map.drop(attrs, [:plaintext_key])
+        )
 
       refute changeset.valid?
       assert %{expires_at: ["can't be blank"]} = Changesets.errors_on(changeset)
@@ -62,7 +71,10 @@ defmodule Gaia.Hub.CoopIdentity.InitialProvisioningKeyTest do
         |> Map.delete(:farm_member_id)
 
       changeset =
-        InitialProvisioningKey.changeset(%InitialProvisioningKey{}, Map.drop(attrs, [:plaintext_key]))
+        InitialProvisioningKey.changeset(
+          %InitialProvisioningKey{},
+          Map.drop(attrs, [:plaintext_key])
+        )
 
       refute changeset.valid?
       assert %{farm_member_id: ["can't be blank"]} = Changesets.errors_on(changeset)
@@ -73,7 +85,10 @@ defmodule Gaia.Hub.CoopIdentity.InitialProvisioningKeyTest do
       attrs = valid_initial_provisioning_key_attrs(farm_member.id)
 
       changeset =
-        InitialProvisioningKey.changeset(%InitialProvisioningKey{}, Map.drop(attrs, [:plaintext_key]))
+        InitialProvisioningKey.changeset(
+          %InitialProvisioningKey{},
+          Map.drop(attrs, [:plaintext_key])
+        )
 
       assert Ecto.Changeset.get_field(changeset, :used) == false
     end

@@ -232,7 +232,9 @@ defmodule Gaia.Hub.CoopIdentityTest do
       assert String.contains?(result.disposable_password, "-")
 
       # Verify provisioning key was stored in database
-      provisioning_key = Repo.get_by(InitialProvisioningKey, farm_member_id: result.farm_member.id)
+      provisioning_key =
+        Repo.get_by(InitialProvisioningKey, farm_member_id: result.farm_member.id)
+
       assert provisioning_key != nil
       assert provisioning_key.used == false
       assert Provision.provisioning_key_valid?(provisioning_key.key_hash, result.provisioning_key)
@@ -295,7 +297,9 @@ defmodule Gaia.Hub.CoopIdentityTest do
 
       assert {:ok, result} = CoopIdentity.add_new_farm_member(attrs)
 
-      provisioning_key = Repo.get_by(InitialProvisioningKey, farm_member_id: result.farm_member.id)
+      provisioning_key =
+        Repo.get_by(InitialProvisioningKey, farm_member_id: result.farm_member.id)
+
       now = DateTime.utc_now()
       expected_expiry = DateTime.add(now, 30, :day)
 

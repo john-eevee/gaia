@@ -50,7 +50,15 @@ defmodule Gaia.Hub.CoopIdentity.Farmer do
   @doc false
   def changeset(farmer, attrs) do
     farmer
-    |> cast(attrs, [:email, :first_name, :last_name, :role, :farm_member_id, :password_hash, :must_change_password])
+    |> cast(attrs, [
+      :email,
+      :first_name,
+      :last_name,
+      :role,
+      :farm_member_id,
+      :password_hash,
+      :must_change_password
+    ])
     |> validate_required([:email, :first_name, :last_name, :role, :farm_member_id])
     |> validate_format(:email, ~r/^[^\s]+@[^\s]+$/, message: "must have the @ sign and no spaces")
     |> unique_constraint(:email)
