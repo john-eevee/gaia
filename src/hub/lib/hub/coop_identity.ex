@@ -18,7 +18,6 @@ defmodule Gaia.Hub.CoopIdentity do
   alias Gaia.Hub.CoopIdentity.DataSharingPolicy
   alias Gaia.Hub.Repo
   require Logger
-  import Ecto.Query
 
   @typedoc """
   A GeoJSON string representing geographic data,
