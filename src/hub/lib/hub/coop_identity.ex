@@ -148,32 +148,36 @@ defmodule Gaia.Hub.CoopIdentity do
         |> Repo.update()
         |> tap(fn
           {:ok, updated_policy} ->
-            new_values =
-              Map.take(updated_policy, [
-                :share_anonymous_soil_data,
-                :share_pest_sightings,
-                :share_yield_data
-              ])
-
-            changes =
-              for {key, new_val} <- new_values,
-                  Map.get(old_values, key) != new_val,
-                  do: {key, Map.get(old_values, key), new_val}
-
-            if changes != [] do
-              Logger.info(
-                "Data sharing policy updated for farm member #{farm_member_id}: " <>
-                  Enum.map_join(changes, ", ", fn {field, old_val, new_val} ->
-                    "#{field} changed from #{old_val} to #{new_val}"
-                  end)
-              )
-            end
+            log_changes(updated_policy, old_values, farm_member_id)
 
           {:error, changeset} ->
             Logger.error(
               "Failed to update data sharing policy for farm member #{farm_member_id}: #{inspect(changeset)}"
             )
         end)
+    end
+  end
+
+  defp log_changes(updated_policy, old_values, farm_member_id) do
+    new_values =
+      Map.take(updated_policy, [
+        :share_anonymous_soil_data,
+        :share_pest_sightings,
+        :share_yield_data
+      ])
+
+    changes =
+      for {key, new_val} <- new_values,
+          Map.get(old_values, key) != new_val,
+          do: {key, Map.get(old_values, key), new_val}
+
+    if changes != [] do
+      Logger.info(
+        "Data sharing policy updated for farm member #{farm_member_id}: " <>
+          Enum.map_join(changes, ", ", fn {field, old_val, new_val} ->
+            "#{field} changed from #{old_val} to #{new_val}"
+          end)
+      )
     end
   end
 end
