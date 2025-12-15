@@ -96,12 +96,11 @@ defmodule Gaia.Hub.CoopIdentity.FarmerTest do
         farm_id: Ecto.UUID.generate()
       }
 
-      assert {:error, changeset} =
-               %Farmer{}
-               |> Farmer.changeset(attrs)
-               |> Repo.insert()
-
-      assert "does not exist" in errors_on(changeset).farm_id
+      assert_raise Ecto.ConstraintError, fn ->
+        %Farmer{}
+        |> Farmer.changeset(attrs)
+        |> Repo.insert()
+      end
     end
   end
 end
