@@ -160,9 +160,7 @@ defmodule Gaia.Hub.CoopIdentity do
   def toggle_data_sharing_policy(farm_id, attrs) do
     case Repo.get_by(DataSharingPolicy, farm_id: farm_id) do
       nil ->
-        Logger.warning(
-          "Attempted to toggle policy for non-existent farm #{farm_id}"
-        )
+        Logger.warning("Attempted to toggle policy for non-existent farm #{farm_id}")
 
         {:error, :not_found}
 
