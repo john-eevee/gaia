@@ -177,7 +177,7 @@ defmodule Gaia.Hub.CoopIdentity do
 
           {:error, changeset} ->
             Logger.metadata(farm_id: farm_id)
-            # credo:disable-for-next-line Credo.Check.Refactor.NestingCalls
+            # credo:disable-for-next-line
             Logger.error(fn -> "Failed to update data sharing policy: #{inspect(changeset)}" end)
         end)
     end
