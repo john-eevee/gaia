@@ -6,7 +6,7 @@ defmodule Gaia.Hub.CoopIdentity.DataSharingPolicyTest do
   alias Gaia.Hub.CoopIdentity.DataSharingPolicy
   alias Gaia.Hub.Repo
   alias Gaia.TestingFacility.Changesets
-  import Gaia.Hub.CoopIdentity.FarmMemberFixtures
+  import Gaia.Hub.CoopIdentity.FarmFixtures
   import Gaia.Hub.CoopIdentity.DataSharingPolicyFixtures
 
   setup tags do
@@ -16,7 +16,7 @@ defmodule Gaia.Hub.CoopIdentity.DataSharingPolicyTest do
   end
 
   describe "data sharing policy validations" do
-    test "should require farm_member_id" do
+    test "should require farm_id" do
       attrs = %{
         share_anonymous_soil_data: false,
         share_pest_sightings: false,
@@ -25,12 +25,12 @@ defmodule Gaia.Hub.CoopIdentity.DataSharingPolicyTest do
 
       changeset = DataSharingPolicy.changeset(%DataSharingPolicy{}, attrs)
       refute changeset.valid?
-      assert %{farm_member_id: ["can't be blank"]} = Changesets.errors_on(changeset)
+      assert %{farm_id: ["can't be blank"]} = Changesets.errors_on(changeset)
     end
 
     test "should accept valid attributes with all defaults" do
-      farm_member = valid_farm_member_attrs() |> CoopIdentity.register_farm() |> elem(1)
-      attrs = valid_data_sharing_policy_attrs(farm_member.id)
+      farm = valid_farm_attrs() |> CoopIdentity.register_farm() |> elem(1)
+      attrs = valid_data_sharing_policy_attrs(farm.id)
 
       changeset = DataSharingPolicy.changeset(%DataSharingPolicy{}, attrs)
       assert changeset.valid?

@@ -1,21 +1,21 @@
 defmodule Gaia.Hub.CoopIdentity.InitialProvisioningKey do
   @moduledoc """
-  Schema representing a secure, single-use provisioning key for onboarding new farm members.
+  Schema representing a secure, single-use provisioning key for onboarding new farms.
 
-  The provisioning key is generated when an admin creates a new FarmMember and is used
+  The provisioning key is generated when an admin creates a new Farm and is used
   during the initial provisioning process. Once used, the key is invalidated to prevent reuse.
   """
   use Ecto.Schema
   import Ecto.Changeset
 
-  alias Gaia.Hub.CoopIdentity.FarmMember
+  alias Gaia.Hub.CoopIdentity.Farm
 
   @type t() :: %__MODULE__{
           id: Ecto.UUID.t(),
           key_hash: String.t(),
           used: boolean(),
           expires_at: DateTime.t(),
-          farm_member_id: Ecto.UUID.t(),
+          farm_id: Ecto.UUID.t(),
           inserted_at: DateTime.t(),
           updated_at: DateTime.t()
         }
@@ -27,7 +27,7 @@ defmodule Gaia.Hub.CoopIdentity.InitialProvisioningKey do
     field(:used, :boolean, default: false)
     field(:expires_at, :utc_datetime_usec)
 
-    belongs_to(:farm_member, FarmMember)
+    belongs_to(:farm, Farm)
 
     timestamps()
   end
@@ -35,10 +35,10 @@ defmodule Gaia.Hub.CoopIdentity.InitialProvisioningKey do
   @doc false
   def changeset(initial_provisioning_key, attrs) do
     initial_provisioning_key
-    |> cast(attrs, [:key_hash, :used, :expires_at, :farm_member_id])
-    |> validate_required([:key_hash, :expires_at, :farm_member_id])
-    |> unique_constraint(:farm_member_id)
-    |> foreign_key_constraint(:farm_member_id)
+    |> cast(attrs, [:key_hash, :used, :expires_at, :farm_id])
+    |> validate_required([:key_hash, :expires_at, :farm_id])
+    |> unique_constraint(:farm_id)
+    |> foreign_key_constraint(:farm_id)
   end
 
   @doc """

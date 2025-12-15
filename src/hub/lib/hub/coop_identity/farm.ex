@@ -1,6 +1,6 @@
-defmodule Gaia.Hub.CoopIdentity.FarmMember do
+defmodule Gaia.Hub.CoopIdentity.Farm do
   @moduledoc """
-  Schema representing a farm member in the cooperative identity system.
+  Schema representing a farm in the cooperative identity system.
   """
   use Ecto.Schema
   import Ecto.Changeset
@@ -20,7 +20,7 @@ defmodule Gaia.Hub.CoopIdentity.FarmMember do
 
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
-  schema "farm_members" do
+  schema "farms" do
     field(:name, :string)
     field(:business_id, :string)
     field(:joined_at, :utc_datetime_usec)
@@ -33,8 +33,8 @@ defmodule Gaia.Hub.CoopIdentity.FarmMember do
   end
 
   @doc false
-  def changeset(farm_member, attrs) do
-    farm_member
+  def changeset(farm, attrs) do
+    farm
     |> cast(attrs, [:name, :business_id, :joined_at, :location, :boundaries])
     |> validate_required([:name, :business_id, :joined_at, :location])
   end

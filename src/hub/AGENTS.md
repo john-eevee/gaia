@@ -206,14 +206,14 @@ All endpoints for `Farm Nodes` (except the provisioning endpoint) MUST be protec
 
 This is the one flow that does *not* use mTLS.
 
-1.  **Out-of-Band:** An admin manually creates a `FarmMember` in the `CoopIdentity` context.
+1.  **Out-of-Band:** An admin manually creates a `Farm` in the `CoopIdentity` context.
 2.  **Key Generation:** The Hub generates a secure, single-use **`InitialProvisioningKey`**.
 3.  **The Endpoint:** You will work on a single, public, non-mTLS endpoint (e.g., `/api/v1/provision`).
 4.  **The Exchange:**
     * Node sends its `InitialProvisioningKey`.
     * The Hub validates the key.
     * The Hub *immediately invalidates the key* to prevent reuse.
-    * The Hub's internal CA generates and signs a new client certificate for that `FarmMember`.
+    * The Hub's internal CA generates and signs a new client certificate for that `Farm`.
     * The Hub returns this certificate to the Node.
     * All future communication from the Node MUST use this certificate.
 
@@ -221,4 +221,4 @@ This is the one flow that does *not* use mTLS.
 This is a **CRITICAL STAKEHOLDER RULE**. Any function you write that aggregates data from multiple farms (e.g., in `RegionalAnalytics`) MUST check the `DataSharingPolicy` for *each* farm involved. The default is `share_nothing`. You must explicitly query for permission *before* including a farm's data in an aggregate.
 ----
 
-Write code that is explicit. Do not defensively code against nil values. Trust the supervision tree. If a FarmMember should exist for a given request, pattern match on it. If it's nil, let the process crash so the supervisor can handle it. This is safer than processing a request in an invalid state.
+Write code that is explicit. Do not defensively code against nil values. Trust the supervision tree. If a Farm should exist for a given request, pattern match on it. If it's nil, let the process crash so the supervisor can handle it. This is safer than processing a request in an invalid state.

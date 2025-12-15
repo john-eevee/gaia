@@ -1,14 +1,14 @@
-# Farm Member Onboarding Workflow
+# Farm Onboarding Workflow
 
 ## Overview
 
-This document describes the workflow for onboarding new farm members to the Gaia cooperative. The process ensures secure provisioning of farm nodes while maintaining farmer autonomy and explicit trust principles.
+This document describes the workflow for onboarding new farms to the Gaia cooperative. The process ensures secure provisioning of farm nodes while maintaining farmer autonomy and explicit trust principles.
 
 ## Process Flow
 
-### 1. Admin Creates New Farm Member
+### 1. Admin Creates New Farm
 
-An administrator initiates the onboarding process by calling the `add_new_farm_member/1` function with the following information:
+An administrator initiates the onboarding process by calling the `add_new_farm/1` function with the following information:
 
 - **Farm Details:**
   - Farm name
@@ -25,7 +25,7 @@ An administrator initiates the onboarding process by calling the `add_new_farm_m
 **Example:**
 
 ```elixir
-{:ok, result} = Gaia.Hub.CoopIdentity.add_new_farm_member(%{
+{:ok, result} = Gaia.Hub.CoopIdentity.add_new_farm(%{
   farm_name: "Green Valley Farm",
   business_id: "GVF123",
   location: %Geo.Point{coordinates: {-80.191790, 25.761680}, srid: 4326},
@@ -40,7 +40,7 @@ An administrator initiates the onboarding process by calling the `add_new_farm_m
 
 The system performs the following operations atomically:
 
-1. **Registers the Farm Member** in the cooperative
+1. **Registers the Farm** in the cooperative
 2. **Creates a Data Sharing Policy** with all sharing options disabled by default (following the "share nothing" principle)
 3. **Generates a Secure Provisioning Key** for the farm node
    - Single-use key
@@ -56,14 +56,14 @@ The system returns the following credentials (shown only once):
 
 ```elixir
 %{
-  farm_member: %FarmMember{...},
+  farm: %Farm{...},
   farmer: %Farmer{...},
   provisioning_key: "Tractor5-Harvest3-Field9-Wheat2-Barn7-Plow4",
   disposable_password: "Seed8-Plant2-Grow6-Reap1-Store3-Market9"
 }
 ```
 
-**Security Note:** These plaintext credentials are never stored and cannot be recovered. The admin must securely communicate them to the farm member.
+**Security Note:** These plaintext credentials are never stored and cannot be recovered. The admin must securely communicate them to the farm.
 
 ### 4. Farm Node Provisioning
 
@@ -117,11 +117,11 @@ When the farmer logs in for the first time:
 
 ## API Reference
 
-### `add_new_farm_member/1`
+### `add_new_farm/1`
 
 ```elixir
-@spec add_new_farm_member(add_farm_member_attrs()) ::
-  {:ok, add_farm_member_result()} | {:error, Ecto.Changeset.t()}
+@spec add_new_farm(add_farm_attrs()) ::
+  {:ok, add_farm_result()} | {:error, Ecto.Changeset.t()}
 ```
 
 **Parameters:**
@@ -139,7 +139,7 @@ When the farmer logs in for the first time:
 
 On success, returns `{:ok, result}` where result contains:
 
-- `farm_member`: The created FarmMember struct
+- `farm`: The created Farm struct
 - `farmer`: The created Farmer struct
 - `provisioning_key`: Plaintext provisioning key (shown only once)
 - `disposable_password`: Plaintext disposable password (shown only once)
@@ -150,12 +150,12 @@ On error, returns `{:error, changeset}` with validation errors.
 
 ### For Administrators
 
-1. **Secure Communication:** Use a secure channel to communicate credentials to farm members (encrypted email, secure messaging, or in-person)
-2. **Immediate Use:** Encourage farm members to use the provisioning key promptly
-3. **Documentation:** Provide clear instructions to farm members on using their credentials
-4. **Record Keeping:** Keep a record of when farm members were added (but not their credentials)
+1. **Secure Communication:** Use a secure channel to communicate credentials to farms (encrypted email, secure messaging, or in-person)
+2. **Immediate Use:** Encourage farms to use the provisioning key promptly
+3. **Documentation:** Provide clear instructions to farms on using their credentials
+4. **Record Keeping:** Keep a record of when farms were added (but not their credentials)
 
-### For Farm Members
+### For Farms
 
 1. **Protect Credentials:** Keep the provisioning key and disposable password secure
 2. **Prompt Setup:** Complete farm node provisioning as soon as possible
@@ -169,7 +169,7 @@ On error, returns `{:error, changeset}` with validation errors.
 If a provisioning key expires before use:
 
 1. Contact an administrator
-2. The administrator can generate a new provisioning key for the farm member
+2. The administrator can generate a new provisioning key for the farm
 3. The old key will remain expired and unusable
 
 ### Provisioning Key Lost
@@ -178,7 +178,7 @@ If the provisioning key is lost before use:
 
 1. Contact an administrator immediately
 2. The administrator should mark the current key as used to prevent misuse
-3. Generate a new provisioning key for the farm member
+3. Generate a new provisioning key for the farm
 
 ### Disposable Password Lost
 

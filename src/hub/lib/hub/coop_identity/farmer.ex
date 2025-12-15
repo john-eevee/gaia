@@ -1,8 +1,8 @@
 defmodule Gaia.Hub.CoopIdentity.Farmer do
   @moduledoc """
-  Represents a human user associated with a `Gaia.Hub.CoopIdentity.FarmMember`.
+  Represents a human user associated with a `Gaia.Hub.CoopIdentity.Farm`.
 
-  While `FarmMember` represents the legal business entity or the physical farm node
+  While `Farm` represents the legal business entity or the physical farm node
   registered in the cooperative, `Farmer` represents the individuals who manage
   and operate that farm.
 
@@ -15,7 +15,7 @@ defmodule Gaia.Hub.CoopIdentity.Farmer do
   use Ecto.Schema
   import Ecto.Changeset
 
-  alias Gaia.Hub.CoopIdentity.FarmMember
+  alias Gaia.Hub.CoopIdentity.Farm
 
   @type roles() :: :owner | :staff | :admin
 
@@ -27,7 +27,7 @@ defmodule Gaia.Hub.CoopIdentity.Farmer do
           role: roles(),
           password_hash: String.t() | nil,
           must_change_password: boolean(),
-          farm_member_id: Ecto.UUID.t(),
+          farm_id: Ecto.UUID.t(),
           inserted_at: DateTime.t(),
           updated_at: DateTime.t()
         }
@@ -42,7 +42,7 @@ defmodule Gaia.Hub.CoopIdentity.Farmer do
     field(:password_hash, :string)
     field(:must_change_password, :boolean, default: false)
 
-    belongs_to(:farm_member, FarmMember)
+    belongs_to(:farm, Farm)
 
     timestamps()
   end
@@ -55,13 +55,13 @@ defmodule Gaia.Hub.CoopIdentity.Farmer do
       :first_name,
       :last_name,
       :role,
-      :farm_member_id,
+      :farm_id,
       :password_hash,
       :must_change_password
     ])
-    |> validate_required([:email, :first_name, :last_name, :role, :farm_member_id])
+    |> validate_required([:email, :first_name, :last_name, :role, :farm_id])
     |> validate_format(:email, ~r/^[^\s]+@[^\s]+$/, message: "must have the @ sign and no spaces")
     |> unique_constraint(:email)
-    |> foreign_key_constraint(:farm_member_id)
+    |> foreign_key_constraint(:farm_id)
   end
 end

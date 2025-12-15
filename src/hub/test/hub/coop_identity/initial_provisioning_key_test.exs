@@ -6,7 +6,7 @@ defmodule Gaia.Hub.CoopIdentity.InitialProvisioningKeyTest do
   alias Gaia.Hub.Repo
   alias Gaia.Hub.Provision
   alias Gaia.TestingFacility.Changesets
-  import Gaia.Hub.CoopIdentity.FarmMemberFixtures
+  import Gaia.Hub.CoopIdentity.FarmFixtures
   import Gaia.Hub.CoopIdentity.InitialProvisioningKeyFixtures
 
   setup tags do
@@ -17,8 +17,8 @@ defmodule Gaia.Hub.CoopIdentity.InitialProvisioningKeyTest do
 
   describe "InitialProvisioningKey.changeset/2" do
     test "should create a valid changeset with valid attributes" do
-      farm_member = valid_farm_member_attrs() |> CoopIdentity.register_farm() |> elem(1)
-      attrs = valid_initial_provisioning_key_attrs(farm_member.id)
+      farm = valid_farm_attrs() |> CoopIdentity.register_farm() |> elem(1)
+      attrs = valid_initial_provisioning_key_attrs(farm.id)
 
       changeset =
         InitialProvisioningKey.changeset(
@@ -30,10 +30,10 @@ defmodule Gaia.Hub.CoopIdentity.InitialProvisioningKeyTest do
     end
 
     test "should require key_hash" do
-      farm_member = valid_farm_member_attrs() |> CoopIdentity.register_farm() |> elem(1)
+      farm = valid_farm_attrs() |> CoopIdentity.register_farm() |> elem(1)
 
       attrs =
-        valid_initial_provisioning_key_attrs(farm_member.id)
+        valid_initial_provisioning_key_attrs(farm.id)
         |> Map.delete(:key_hash)
 
       changeset =
@@ -47,10 +47,10 @@ defmodule Gaia.Hub.CoopIdentity.InitialProvisioningKeyTest do
     end
 
     test "should require expires_at" do
-      farm_member = valid_farm_member_attrs() |> CoopIdentity.register_farm() |> elem(1)
+      farm = valid_farm_attrs() |> CoopIdentity.register_farm() |> elem(1)
 
       attrs =
-        valid_initial_provisioning_key_attrs(farm_member.id)
+        valid_initial_provisioning_key_attrs(farm.id)
         |> Map.delete(:expires_at)
 
       changeset =
@@ -63,12 +63,12 @@ defmodule Gaia.Hub.CoopIdentity.InitialProvisioningKeyTest do
       assert %{expires_at: ["can't be blank"]} = Changesets.errors_on(changeset)
     end
 
-    test "should require farm_member_id" do
-      farm_member = valid_farm_member_attrs() |> CoopIdentity.register_farm() |> elem(1)
+    test "should require farm_id" do
+      farm = valid_farm_attrs() |> CoopIdentity.register_farm() |> elem(1)
 
       attrs =
-        valid_initial_provisioning_key_attrs(farm_member.id)
-        |> Map.delete(:farm_member_id)
+        valid_initial_provisioning_key_attrs(farm.id)
+        |> Map.delete(:farm_id)
 
       changeset =
         InitialProvisioningKey.changeset(
@@ -77,12 +77,12 @@ defmodule Gaia.Hub.CoopIdentity.InitialProvisioningKeyTest do
         )
 
       refute changeset.valid?
-      assert %{farm_member_id: ["can't be blank"]} = Changesets.errors_on(changeset)
+      assert %{farm_id: ["can't be blank"]} = Changesets.errors_on(changeset)
     end
 
     test "should default used to false" do
-      farm_member = valid_farm_member_attrs() |> CoopIdentity.register_farm() |> elem(1)
-      attrs = valid_initial_provisioning_key_attrs(farm_member.id)
+      farm = valid_farm_attrs() |> CoopIdentity.register_farm() |> elem(1)
+      attrs = valid_initial_provisioning_key_attrs(farm.id)
 
       changeset =
         InitialProvisioningKey.changeset(
@@ -96,8 +96,8 @@ defmodule Gaia.Hub.CoopIdentity.InitialProvisioningKeyTest do
 
   describe "InitialProvisioningKey.mark_as_used/1" do
     test "should mark the key as used" do
-      farm_member = valid_farm_member_attrs() |> CoopIdentity.register_farm() |> elem(1)
-      attrs = valid_initial_provisioning_key_attrs(farm_member.id)
+      farm = valid_farm_attrs() |> CoopIdentity.register_farm() |> elem(1)
+      attrs = valid_initial_provisioning_key_attrs(farm.id)
 
       {:ok, key} =
         %InitialProvisioningKey{}
