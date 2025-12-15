@@ -1,7 +1,6 @@
 defmodule Gaia.Hub.CoopIdentity.FarmTest do
   use ExUnit.Case, async: true
 
-  alias Gaia.TestingFacility.Changesets
   alias Gaia.Hub.CoopIdentity.Farm
 
   describe "farm validations" do
