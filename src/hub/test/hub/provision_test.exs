@@ -281,4 +281,127 @@ defmodule Gaia.Hub.ProvisionTest do
                )
     end
   end
+
+  describe "provision_setup/1" do
+    setup do
+      context = CertificateCase.setup_full_test_environment()
+
+      on_exit(fn ->
+        CertificateCase.cleanup_test_environment(context)
+      end)
+
+      {:ok, context}
+    end
+
+    test "successfully validates key and signs CSR", %{ca_subject: ca_subject} do
+      # Generate provisioning key and hash
+      key = Provision.generate_intial_provisioning_key()
+      key_hash = Provision.hash_provisioning_key(key)
+
+      # Create CSR
+      csr_data = CertificateCase.create_test_csr()
+
+      # Call provision_setup
+      result =
+        Provision.provision_setup(%{
+          key_hash: key_hash,
+          provisioning_key: key,
+          csr_pem: csr_data.client_csr_pem
+        })
+
+      assert {:ok, cert_pem} = result
+      assert is_binary(cert_pem)
+      assert String.contains?(cert_pem, "-----BEGIN CERTIFICATE-----")
+      assert String.contains?(cert_pem, "-----END CERTIFICATE-----")
+
+      # Verify certificate properties
+      expected_public_key = PublicKey.derive(csr_data.client_key)
+
+      assert {:ok, _cert} =
+               CertificateCase.verify_signed_certificate(
+                 result,
+                 csr_data.client_subject,
+                 ca_subject,
+                 expected_public_key
+               )
+    end
+
+    test "returns error when provisioning key is invalid", %{} do
+      # Generate provisioning key and hash
+      key = Provision.generate_intial_provisioning_key()
+      wrong_key = Provision.generate_intial_provisioning_key()
+      key_hash = Provision.hash_provisioning_key(key)
+
+      # Create CSR
+      csr_data = CertificateCase.create_test_csr()
+
+      # Call provision_setup with wrong key
+      result =
+        Provision.provision_setup(%{
+          key_hash: key_hash,
+          provisioning_key: wrong_key,
+          csr_pem: csr_data.client_csr_pem
+        })
+
+      assert {:error, :invalid_key} = result
+    end
+
+    test "returns error for invalid CSR when key is valid", %{} do
+      # Generate provisioning key and hash
+      key = Provision.generate_intial_provisioning_key()
+      key_hash = Provision.hash_provisioning_key(key)
+
+      invalid_csr_pem = "invalid pem content"
+
+      # Call provision_setup with invalid CSR
+      result =
+        Provision.provision_setup(%{
+          key_hash: key_hash,
+          provisioning_key: key,
+          csr_pem: invalid_csr_pem
+        })
+
+      assert {:error, _reason} = result
+      assert result != {:error, :invalid_key}
+    end
+
+    test "raises FunctionClauseError for non-binary key_hash" do
+      csr_data = CertificateCase.create_test_csr()
+
+      assert_raise FunctionClauseError, fn ->
+        Provision.provision_setup(%{
+          key_hash: 123,
+          provisioning_key: "valid-key",
+          csr_pem: csr_data.client_csr_pem
+        })
+      end
+    end
+
+    test "raises FunctionClauseError for non-binary provisioning_key" do
+      key = Provision.generate_intial_provisioning_key()
+      key_hash = Provision.hash_provisioning_key(key)
+      csr_data = CertificateCase.create_test_csr()
+
+      assert_raise FunctionClauseError, fn ->
+        Provision.provision_setup(%{
+          key_hash: key_hash,
+          provisioning_key: 123,
+          csr_pem: csr_data.client_csr_pem
+        })
+      end
+    end
+
+    test "raises FunctionClauseError for non-binary csr_pem" do
+      key = Provision.generate_intial_provisioning_key()
+      key_hash = Provision.hash_provisioning_key(key)
+
+      assert_raise FunctionClauseError, fn ->
+        Provision.provision_setup(%{
+          key_hash: key_hash,
+          provisioning_key: key,
+          csr_pem: 123
+        })
+      end
+    end
+  end
 end
