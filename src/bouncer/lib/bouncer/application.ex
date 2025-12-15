@@ -24,7 +24,8 @@ defmodule Gaia.Bouncer.Application do
     ]
 
     opts = [strategy: :one_for_one, name: Gaia.Bouncer.Supervisor]
-    Logger.info("Starting Bouncer server on port #{port()}")
+    Logger.info(fn -> "Starting Bouncer server: #{port()}" end)
+
     Supervisor.start_link(children, opts)
   end
 

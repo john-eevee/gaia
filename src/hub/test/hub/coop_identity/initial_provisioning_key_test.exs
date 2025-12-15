@@ -4,7 +4,6 @@ defmodule Gaia.Hub.CoopIdentity.InitialProvisioningKeyTest do
   alias Gaia.Hub.CoopIdentity
   alias Gaia.Hub.CoopIdentity.InitialProvisioningKey
   alias Gaia.Hub.Repo
-  alias Gaia.Hub.Provision
   alias Gaia.TestingFacility.Changesets
   import Gaia.Hub.CoopIdentity.FarmFixtures
   import Gaia.Hub.CoopIdentity.InitialProvisioningKeyFixtures

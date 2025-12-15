@@ -24,4 +24,6 @@ config :hub,
 
 config :geo_postgis, json_library: Jason
 
+config :logger, :default_formatter, metadata: [:farm_id, :farmer_id]
+
 import_config "#{config_env()}.exs"
