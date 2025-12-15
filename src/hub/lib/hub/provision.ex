@@ -57,6 +57,54 @@ defmodule Gaia.Hub.Provision do
   end
 
   @doc """
+  Performs the complete provisioning setup by validating a provisioning key
+  and signing a certificate signing request.
+
+  This function combines provision key validation and certificate signing into
+  a single operation, which is the typical flow for farm node provisioning.
+
+  ## Parameters
+
+    * `params` - A map containing:
+      - `:key_hash` - The stored hash of the provisioning key
+      - `:provisioning_key` - The plaintext provisioning key to validate
+      - `:csr_pem` - The certificate signing request in PEM format
+
+  ## Returns
+
+    * `{:ok, cert_pem}` - The signed certificate in PEM format
+    * `{:error, :invalid_key}` - The provisioning key is invalid
+    * `{:error, term()}` - Other errors from certificate signing
+
+  ## Examples
+
+      iex> provision_setup(%{
+      ...>   key_hash: stored_hash,
+      ...>   provisioning_key: "Tractor5-Harvest3-...",
+      ...>   csr_pem: csr_pem_string
+      ...> })
+      {:ok, "-----BEGIN CERTIFICATE-----\\n..."}
+
+  """
+  @spec provision_setup(%{
+          key_hash: String.t(),
+          provisioning_key: String.t(),
+          csr_pem: binary()
+        }) :: {:ok, binary()} | {:error, term()}
+  def provision_setup(%{
+        key_hash: key_hash,
+        provisioning_key: provisioning_key,
+        csr_pem: csr_pem
+      })
+      when is_binary(key_hash) and is_binary(provisioning_key) and is_binary(csr_pem) do
+    if provisioning_key_valid?(key_hash, provisioning_key) do
+      sign_certificate_request(csr_pem)
+    else
+      {:error, :invalid_key}
+    end
+  end
+
+  @doc """
   Signs a certificate signing request (CSR) with the CA's private key.
   """
   @spec sign_certificate_request(binary()) :: {:ok, binary()} | {:error, term()}
