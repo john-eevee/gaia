@@ -26,24 +26,17 @@ defmodule Gaia.Bouncer.Telemetry do
 
   @doc """
   Handles telemetry events and logs metrics.
+  In the future numeric metrics can be sent to monitoring systems.
   """
   def handle_event([:bouncer, :request, :success], measurements, metadata, _config) do
     duration_ms = System.convert_time_unit(measurements.duration, :native, :millisecond)
-
-    Logger.info(
-      "Request succeeded in #{duration_ms}ms, status: #{metadata.status}",
-      duration_ms: duration_ms,
-      status: metadata.status
-    )
+    Logger.info("Request succeeded [status=#{metadata.status}, duration_ms=#{duration_ms}]")
   end
 
   def handle_event([:bouncer, :request, :failure], measurements, _metadata, _config) do
     duration_ms = System.convert_time_unit(measurements.duration, :native, :millisecond)
 
-    Logger.warning(
-      "Request failed in #{duration_ms}ms",
-      duration_ms: duration_ms
-    )
+    Logger.warning("Request failed [duration_ms=#{duration_ms}]")
   end
 
   def measure(fun) when is_function(fun, 0) do

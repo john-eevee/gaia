@@ -68,4 +68,18 @@ mix do deps.get, compile
 mix help
 ```
 
+## Logging Best Practices
+
+- **Use structured metadata:** Prefer `Logger.metadata/1` to attach context like `farm_id`, `farmer_id`, `resource`, or `port` to logs rather than interpolating these values into the message.
+- **Keep messages concise:** Log messages should describe the event (e.g. "Registered new farmer") while metadata carries the contextual details.
+- **Clear metadata when done:** Call `Logger.metadata([])` after logging if the metadata should not persist for subsequent calls in the same process.
+
+Example:
+
+```elixir
+Logger.metadata(farm_id: farm.id, farmer_id: farmer.id)
+Logger.info("Registered new farmer")
+Logger.metadata([])
+```
+
 **Thank you.**

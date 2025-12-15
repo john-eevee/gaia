@@ -96,14 +96,12 @@ defmodule Gaia.Hub.CoopIdentity do
     |> Repo.transaction()
     |> then(fn
       {:ok, %{farm: farm}} ->
-        Logger.info(
-          "Registered new farm with ID #{farm.id} and default data sharing policy (all disabled)"
-        )
-
+        Logger.metadata(farm_id: farm.id)
+        Logger.info("Registered new farm with default data sharing policy (all disabled)")
         {:ok, farm}
 
       {:error, _failed_operation, changeset, _changes_so_far} ->
-        Logger.error("Failed to register farm: #{inspect(changeset)}")
+        Logger.error(fn -> "Failed to register farm: #{inspect(changeset)}" end)
         {:error, changeset}
     end)
   end
@@ -116,10 +114,11 @@ defmodule Gaia.Hub.CoopIdentity do
     |> Repo.insert()
     |> tap(fn
       {:ok, farmer} ->
-        Logger.info("Registered new farmer with ID #{farmer.id} on farm #{farmer.farm_id}")
+        Logger.metadata(farmer_id: farmer.id, farm_id: farmer.farm_id)
+        Logger.info("Registered new farmer")
 
       {:error, changeset} ->
-        Logger.error("Failed to register farmer: #{inspect(changeset)}")
+        Logger.error(fn -> "Failed to register farmer: #{inspect(changeset)}" end)
     end)
   end
 
@@ -160,7 +159,8 @@ defmodule Gaia.Hub.CoopIdentity do
   def toggle_data_sharing_policy(farm_id, attrs) do
     case Repo.get_by(DataSharingPolicy, farm_id: farm_id) do
       nil ->
-        Logger.warning("Attempted to toggle policy for non-existent farm #{farm_id}")
+        Logger.metadata(farm_id: farm_id)
+        Logger.warning("Attempted to toggle policy for non-existent farm")
 
         {:error, :not_found}
 
@@ -176,9 +176,8 @@ defmodule Gaia.Hub.CoopIdentity do
             log_changes(updated_policy, old_values, farm_id)
 
           {:error, changeset} ->
-            Logger.error(
-              "Failed to update data sharing policy for farm #{farm_id}: #{inspect(changeset)}"
-            )
+            Logger.metadata(farm_id: farm_id)
+            Logger.error(fn -> "Failed to update data sharing policy: #{inspect(changeset)}" end)
         end)
     end
   end
@@ -278,10 +277,8 @@ defmodule Gaia.Hub.CoopIdentity do
     |> Repo.transaction()
     |> case do
       {:ok, %{farm: farm, farmer: farmer}} ->
-        Logger.info(
-          "Added new farm #{farm.id} with farmer #{farmer.id}. " <>
-            "Provisioning key and disposable password generated."
-        )
+        Logger.metadata(farm_id: farm.id, farmer_id: farmer.id)
+        Logger.info("Added new farm. Provisioning key and disposable password generated.")
 
         {:ok,
          %{
@@ -292,7 +289,7 @@ defmodule Gaia.Hub.CoopIdentity do
          }}
 
       {:error, _failed_operation, changeset, _changes_so_far} ->
-        Logger.error("Failed to add new farm: #{inspect(changeset)}")
+        Logger.error(fn -> "Failed to add new farm: #{inspect(changeset)}" end)
         {:error, changeset}
     end
   end
@@ -311,8 +308,10 @@ defmodule Gaia.Hub.CoopIdentity do
           do: {key, Map.get(old_values, key), new_val}
 
     if changes != [] do
+      Logger.metadata(farm_id: farm_id)
+
       Logger.info(
-        "Data sharing policy updated for farm #{farm_id}: " <>
+        "Data sharing policy updated: " <>
           Enum.map_join(changes, ", ", fn {field, old_val, new_val} ->
             "#{field} changed from #{old_val} to #{new_val}"
           end)

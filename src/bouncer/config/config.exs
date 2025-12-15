@@ -14,9 +14,7 @@ config :bouncer, :database,
   pool_size: String.to_integer(System.get_env("DB_POOL_SIZE", "10"))
 
 # Logger configuration
-config :logger, :console,
-  format: "$time $metadata[$level] $message\n",
-  metadata: [:request_id, :duration_ms, :status]
+config :logger, :default_formatter, metadata: [:request_id, :duration_ms, :status]
 
 # Import environment specific config
 import_config "#{config_env()}.exs"

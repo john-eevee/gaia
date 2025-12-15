@@ -29,12 +29,14 @@ defmodule Gaia.Bouncer.Certificate do
         {:ok, serial_hex}
 
       {:error, reason} ->
-        Logger.debug("Failed to parse certificate: #{inspect(reason)}")
+        Logger.debug(fn -> "Failed to parse certificate: #{inspect(reason)}" end)
+
         {:error, :invalid_certificate}
     end
   rescue
     e ->
-      Logger.debug("Exception parsing certificate: #{inspect(e)}")
+      Logger.debug(fn -> "Exception parsing certificate: #{inspect(e)}" end)
+
       {:error, :parse_error}
   end
 
@@ -58,7 +60,8 @@ defmodule Gaia.Bouncer.Certificate do
         {:ok, :unknown}
 
       {:error, reason} ->
-        Logger.error("Database query failed: #{inspect(reason)}")
+        Logger.error(fn -> "Database query failed: #{inspect(reason)}" end)
+
         {:error, reason}
     end
   end

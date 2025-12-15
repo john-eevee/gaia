@@ -34,7 +34,8 @@ defmodule Gaia.Bouncer.Router do
           end
         else
           {:error, reason} ->
-            Logger.warning("Certificate validation failed: #{inspect(reason)}")
+            Logger.warning(fn -> "Certificate validation failed: #{inspect(reason)}" end)
+
             {:error, 412}
         end
       end)
