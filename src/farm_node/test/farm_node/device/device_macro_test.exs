@@ -1,19 +1,19 @@
 defmodule Gaia.DeviceMacroTest do
   use ExUnit.Case, async: false
 
-  defmodule TempDevice do
-    use Gaia.Device, type: :temperature_sensor
-  end
+  alias Gaia.FarmNode.Device.TempSensor
 
   setup do
     Application.ensure_all_started(:farm_node)
     :ok
   end
 
-  test "can start module-defined device" do
+  test "can start module-defined device with custom telemetry" do
     Gaia.FarmNode.Device.TelemetryStream.subscribe("telemetry:temperature_sensor")
-    {:ok, _} = TempDevice.start_link(id: "temp-1", interval: 50, battery: 90)
+    {:ok, _} = TempSensor.start_link(id: "temp-1", interval: 50, battery: 90)
     assert_receive {:telemetry, "telemetry:temperature_sensor", payload}, 500
     assert payload.type == :temperature_sensor
+    assert Map.has_key?(payload, :temperature)
+    assert is_float(payload.temperature)
   end
 end
