@@ -1,5 +1,5 @@
 defmodule Gaia.FarmNode.Device.Supervisor do
-  @moduledoc "Dynamic supervisor for simulated devices." 
+  @moduledoc "Dynamic supervisor for simulated devices."
   use DynamicSupervisor
 
   def start_link(_args) do
