@@ -99,7 +99,7 @@ else
         echo "Use --help for usage information"
         exit 1
     fi
-    
+
     ELIXIR_CMD="Gaia.FarmNode.HubConnection.Provisioning.CLI.run_interactive()"
 fi
 
