@@ -31,12 +31,16 @@ defmodule Gaia.Device.CustomDeviceTest do
     # Standard fields added by macro
     assert payload.type == :custom_sensor
     assert payload.id == "custom-1"
-    assert payload.battery == 75
+    # Battery may drain slightly between start and first tick
+    assert payload.battery <= 75
+    assert payload.battery >= 72
     assert %DateTime{} = payload.timestamp
 
     # Custom fields from generate_telemetry/1
     assert payload.custom_field == "custom_value"
-    assert payload.battery_level == 75
+    # battery_level reflects the state at tick time (may have drained)
+    assert payload.battery_level <= 75
+    assert payload.battery_level >= 72
     assert is_float(payload.reading)
   end
 
