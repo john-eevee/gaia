@@ -76,4 +76,17 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.ClientTest do
     assert {:error, {:request_failed, :conn_refused}} =
              Client.request_provisioning("https://hub", "key", "bad-body", "farm")
   end
+
+  defmodule TestHttpClientStringBody do
+    def post(_url, _opts) do
+      {:ok, %{status: 200, body: Jason.encode!(%{"certificate" => "CERT_AS_STRING"})}}
+    end
+  end
+
+  test "request_provisioning accepts JSON string body responses" do
+    Application.put_env(:farm_node, :http_client, TestHttpClientStringBody)
+
+    assert {:ok, "CERT_AS_STRING"} =
+             Client.request_provisioning("https://hub", "key", "any", "farm")
+  end
 end

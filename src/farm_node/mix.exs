@@ -7,7 +7,13 @@ defmodule Gaia.FarmNode.MixProject do
       app: :farm_node,
       version: "0.1.0",
       deps: deps(),
-      releases: releases()
+      releases: releases(),
+      test_coverage: [
+        ignore_modules: [
+          ~r/Mix.Tasks.FarmNode.*/,
+          Gaia.FarmNode.HubConnection.Provisioning.CLI
+        ]
+      ]
     ]
     |> Gaia.Build.Mix.apply()
   end

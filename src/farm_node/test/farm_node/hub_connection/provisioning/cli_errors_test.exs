@@ -7,6 +7,8 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.CliErrorsTest do
 
   setup do
     Application.ensure_all_started(:farm_node)
+    # Ensure provisioning state is clean before each test
+    Gaia.FarmNode.HubConnection.Provisioning.Storage.revoke_credentials()
     :ok
   end
 
@@ -17,10 +19,18 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.CliErrorsTest do
 
     Application.put_env(:farm_node, :http_client, TestHttpClient401)
 
-    capture = capture_io(fn ->
-      result = CLI.run(hub_address: "https://hub", provisioning_key: "k", farm_identifier: "f", skip_confirmation: true)
-      assert {:error, {:hub_request_failed, :invalid_provisioning_key}} = result
-    end)
+    capture =
+      capture_io(:stderr, fn ->
+        result =
+          CLI.run(
+            hub_address: "https://hub",
+            provisioning_key: "k",
+            farm_identifier: "f",
+            skip_confirmation: true
+          )
+
+        assert {:error, {:hub_request_failed, :invalid_provisioning_key}} = result
+      end)
 
     assert capture =~ "Provisioning Failed" or capture =~ "Invalid provisioning key"
 
@@ -34,10 +44,18 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.CliErrorsTest do
 
     Application.put_env(:farm_node, :http_client, TestHttpClient500)
 
-    capture = capture_io(fn ->
-      result = CLI.run(hub_address: "https://hub", provisioning_key: "k", farm_identifier: "f", skip_confirmation: true)
-      assert {:error, {:hub_request_failed, {:http_error, 500, "server error"}}} = result
-    end)
+    capture =
+      capture_io(:stderr, fn ->
+        result =
+          CLI.run(
+            hub_address: "https://hub",
+            provisioning_key: "k",
+            farm_identifier: "f",
+            skip_confirmation: true
+          )
+
+        assert {:error, {:hub_request_failed, {:http_error, 500, "server error"}}} = result
+      end)
 
     assert capture =~ "Provisioning Failed"
 
