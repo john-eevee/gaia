@@ -44,14 +44,24 @@ defmodule Mix.Tasks.FarmNode.Provision do
         strict: [
           hub_address: :string,
           provisioning_key: :string,
-          farm_identifier: :string
+          farm_identifier: :string,
+          yes: :boolean
         ],
         aliases: [
           h: :hub_address,
           k: :provisioning_key,
-          f: :farm_identifier
+          f: :farm_identifier,
+          y: :yes
         ]
       )
+
+    # Map --yes to skip_confirmation for the CLI
+    opts =
+      if Keyword.get(opts, :yes, false) do
+        Keyword.put(opts, :skip_confirmation, true)
+      else
+        opts
+      end
 
     # Delegate to CLI module
     result =

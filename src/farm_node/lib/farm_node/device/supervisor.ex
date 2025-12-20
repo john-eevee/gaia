@@ -11,10 +11,15 @@ defmodule Gaia.FarmNode.Device.Supervisor do
     DynamicSupervisor.init(strategy: :one_for_one)
   end
 
-  def start_device(opts) do
+  def start_device(opts) when is_list(opts) do
+    # Allow callers to specify an explicit module for the device (useful for
+    # tests and custom device modules). Fallback to the legacy module name
+    # if none provided.
+    module = Keyword.get(opts, :module, Gaia.FarmNode.Device)
+
     child_spec = %{
       id: opts[:id],
-      start: {Gaia.FarmNode.Device, :start_link, [opts]},
+      start: {module, :start_link, [opts]},
       restart: :transient
     }
 

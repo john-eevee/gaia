@@ -64,8 +64,11 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.Client do
       {"user-agent", "Gaia-FarmNode/0.1.0"}
     ]
 
-    # Using Req for HTTP client (already in deps via igniter)
-    case Req.post(url,
+    # Allow injection of a test HTTP client via application config for
+    # deterministic testing. Defaults to Req in production.
+    http_client = Application.get_env(:farm_node, :http_client, Req)
+
+    case http_client.post(url,
            body: json_body,
            headers: headers,
            receive_timeout: @timeout,
