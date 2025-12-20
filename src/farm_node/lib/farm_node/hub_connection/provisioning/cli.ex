@@ -68,13 +68,9 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.CLI do
 
       skip_confirmation = Keyword.get(opts, :skip_confirmation, false)
 
-      unless skip_confirmation do
+      if not skip_confirmation do
         display_confirmation(config)
-
-        unless confirm?() do
-          info_message("Provisioning cancelled.")
-          {:error, :cancelled}
-        end
+        cancel()
       end
 
       execute_provisioning(config)
@@ -254,6 +250,13 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.CLI do
     String.downcase(String.trim(response)) in ["yes", "y"]
   end
 
+  defp cancel() do
+    if not confirm?() do
+      info_message("Provisioning cancelled.")
+      {:error, :cancelled}
+    end
+  end
+
   # Helper Functions
 
   defp valid_url?(url) do
@@ -268,12 +271,10 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.CLI do
   defp mask_key(key) do
     len = String.length(key)
 
-    cond do
-      len <= 8 ->
-        String.duplicate("*", len)
-
-      true ->
-        String.slice(key, 0..3) <> String.duplicate("*", len - 8) <> String.slice(key, -4..-1)
+    if len <= 8 do
+      String.duplicate("*", len)
+    else
+      String.slice(key, 0..3) <> String.duplicate("*", len - 8) <> String.slice(key, -4..-1)
     end
   end
 
