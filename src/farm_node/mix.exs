@@ -6,7 +6,8 @@ defmodule Gaia.FarmNode.MixProject do
     [
       app: :farm_node,
       version: "0.1.0",
-      deps: deps()
+      deps: deps(),
+      releases: releases()
     ]
     |> Gaia.Build.Mix.apply()
   end
@@ -24,5 +25,30 @@ defmodule Gaia.FarmNode.MixProject do
     [
       {:req, "~> 0.5"}
     ]
+  end
+
+  defp releases do
+    [
+      farm_node: [
+        include_executables_for: [:unix],
+        applications: [runtime_tools: :permanent],
+        steps: [:assemble, &copy_provision_script/1, :tar]
+      ]
+    ]
+  end
+
+  # Copy the provision script to the release bin directory
+  defp copy_provision_script(release) do
+    # Source is relative to the project root
+    project_root = File.cwd!()
+    source = Path.join([project_root, "rel", "commands", "provision.sh"])
+    target = Path.join([release.path, "bin", "provision"])
+
+    File.mkdir_p!(Path.dirname(target))
+    File.cp!(source, target)
+    File.chmod!(target, 0o755)
+
+    IO.puts("* copied provision script to #{Path.relative_to_cwd(target)}")
+    release
   end
 end
