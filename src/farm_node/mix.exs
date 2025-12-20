@@ -29,7 +29,8 @@ defmodule Gaia.FarmNode.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:req, "~> 0.5"}
+      {:req, "~> 0.5"},
+      {:mox, "~> 1.0", only: :test}
     ]
   end
 

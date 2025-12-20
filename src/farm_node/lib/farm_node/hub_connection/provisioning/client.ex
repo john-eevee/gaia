@@ -59,9 +59,11 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.Client do
   end
 
   defp make_request(url, json_body) do
+    version = Application.spec(:farm_node, :vsn)
+
     headers = [
       {"content-type", "application/json"},
-      {"user-agent", "Gaia-FarmNode/0.1.0"}
+      {"user-agent", "Gaia-FarmNode/#{version}"}
     ]
 
     # Allow injection of a test HTTP client via application config for

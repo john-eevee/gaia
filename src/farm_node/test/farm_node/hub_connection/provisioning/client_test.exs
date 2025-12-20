@@ -3,90 +3,100 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.ClientTest do
 
   alias Gaia.FarmNode.HubConnection.Provisioning.Client
 
+  # Define the HTTP client behavior for mocking
+  defmodule HttpClientBehaviour do
+    @callback post(url :: binary, opts :: keyword) ::
+                {:ok, %{status: non_neg_integer, body: any}} | {:error, any}
+  end
+
+  Mox.defmock(MockHttpClient, for: HttpClientBehaviour)
+
   setup do
-    # Backup and clear any http_client config to avoid interfering with other tests
-    orig = Application.get_env(:farm_node, :http_client)
+    # Set up the mock for the test
+    Application.put_env(:farm_node, :http_client, MockHttpClient)
 
     on_exit(fn ->
-      if orig == nil do
-        Application.delete_env(:farm_node, :http_client)
-      else
-        Application.put_env(:farm_node, :http_client, orig)
-      end
+      Application.delete_env(:farm_node, :http_client)
     end)
 
     :ok
   end
 
-  defmodule TestHttpClient do
-    def post(_url, opts) do
-      # The body is JSON encoded by the client; decode and match on csr
-      body = opts[:body]
-
-      case Jason.decode(body) do
-        {:ok, %{"csr" => "ok-case"}} ->
-          {:ok, %{status: 200, body: %{"certificate" => "CERT_PEM"}}}
-
-        {:ok, %{"csr" => "401-case"}} ->
-          {:ok, %{status: 401}}
-
-        {:ok, %{"csr" => "409-case"}} ->
-          {:ok, %{status: 409}}
-
-        {:ok, %{"csr" => "500-case"}} ->
-          {:ok, %{status: 500, body: "server error"}}
-
-        _ ->
-          {:error, :conn_refused}
-      end
-    end
-  end
-
   test "request_provisioning returns certificate on 200" do
-    Application.put_env(:farm_node, :http_client, TestHttpClient)
+    Mox.expect(MockHttpClient, :post, fn _url, opts ->
+      body = Jason.decode!(opts[:body])
+      {:ok, %{status: 200, body: %{"certificate" => "CERT_PEM"}}}
+    end)
 
     assert {:ok, "CERT_PEM"} =
              Client.request_provisioning("https://hub", "key", "ok-case", "farm")
+
+    Mox.verify!()
   end
 
   test "request_provisioning returns error for 401" do
-    Application.put_env(:farm_node, :http_client, TestHttpClient)
+    Mox.expect(MockHttpClient, :post, fn _url, _opts ->
+      {:ok, %{status: 401}}
+    end)
 
     assert {:error, :invalid_provisioning_key} =
              Client.request_provisioning("https://hub", "key", "401-case", "farm")
+
+    Mox.verify!()
   end
 
   test "request_provisioning returns farm already registered for 409" do
-    Application.put_env(:farm_node, :http_client, TestHttpClient)
+    Mox.expect(MockHttpClient, :post, fn _url, _opts ->
+      {:ok, %{status: 409}}
+    end)
 
     assert {:error, :farm_already_provisioned} =
              Client.request_provisioning("https://hub", "key", "409-case", "farm")
+
+    Mox.verify!()
   end
 
   test "request_provisioning surfaces http errors" do
-    Application.put_env(:farm_node, :http_client, TestHttpClient)
+    Mox.expect(MockHttpClient, :post, fn _url, _opts ->
+      {:ok, %{status: 500, body: "server error"}}
+    end)
 
     assert {:error, {:http_error, 500, "server error"}} =
              Client.request_provisioning("https://hub", "key", "500-case", "farm")
+
+    Mox.verify!()
   end
 
   test "request_provisioning surfaces request failures" do
-    Application.put_env(:farm_node, :http_client, TestHttpClient)
+    Mox.expect(MockHttpClient, :post, fn _url, _opts ->
+      {:error, :conn_refused}
+    end)
 
     assert {:error, {:request_failed, :conn_refused}} =
-             Client.request_provisioning("https://hub", "key", "bad-body", "farm")
+             Client.request_provisioning("https://hub", "key", "huh", "farm")
+
+    Mox.verify!()
   end
 
-  defmodule TestHttpClientStringBody do
-    def post(_url, _opts) do
-      {:ok, %{status: 200, body: Jason.encode!(%{"certificate" => "CERT_AS_STRING"})}}
-    end
+  test "request_provisioning handles map body responses" do
+    Mox.expect(MockHttpClient, :post, fn _url, _opts ->
+      {:error, %{status: 200, body: %{"error" => "bad request"}}}
+    end)
+
+    assert {:error, {:request_failed, %{status: 200, body: %{"error" => "bad request"}}}} =
+             Client.request_provisioning("https://hub", "key", "bad-body", "farm")
+
+    Mox.verify!()
   end
 
   test "request_provisioning accepts JSON string body responses" do
-    Application.put_env(:farm_node, :http_client, TestHttpClientStringBody)
+    Mox.expect(MockHttpClient, :post, fn _url, _opts ->
+      {:ok, %{status: 200, body: Jason.encode!(%{"certificate" => "CERT_AS_STRING"})}}
+    end)
 
     assert {:ok, "CERT_AS_STRING"} =
              Client.request_provisioning("https://hub", "key", "any", "farm")
+
+    Mox.verify!()
   end
 end
