@@ -52,6 +52,7 @@ defmodule Gaia.Device do
       @default_interval 5_000
 
       defmodule State do
+        @moduledoc false
         defstruct [:id, :type, :interval, :battery, :status, :timer_ref]
       end
 
