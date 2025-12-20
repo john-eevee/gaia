@@ -2,6 +2,7 @@ defmodule Gaia.FarmNode.HubConnection.ProvisioningTest do
   use ExUnit.Case, async: false
 
   alias Gaia.FarmNode.HubConnection.Provisioning
+  alias Gaia.FarmNode.HubConnection.Provisioning.Storage
 
   @test_ssl_dir "priv/test_ssl_provisioning"
 
@@ -51,7 +52,37 @@ defmodule Gaia.FarmNode.HubConnection.ProvisioningTest do
                Provisioning.provision("https://hub.test", "key", "farm-1")
     end
 
-    # Note: Full integration test would require mocking the HTTP client
-    # which is better done with a proper HTTP mocking library in a real scenario
+    test "successful provisioning stores credentials when hub returns certificate" do
+      defmodule TestHttpClientSuccess do
+        def post(_url, _opts) do
+          key = X509.PrivateKey.new_rsa(2048)
+          cert = X509.Certificate.self_signed(key, "/CN=hub-test")
+          {:ok, %{status: 200, body: %{"certificate" => X509.Certificate.to_pem(cert)}}}
+        end
+      end
+
+      Application.put_env(:farm_node, :http_client, TestHttpClientSuccess)
+
+      assert :ok = Provisioning.provision("https://hub", "k", "farm-succ")
+      assert Storage.provisioned?() == true
+
+      Storage.revoke_credentials()
+      Application.delete_env(:farm_node, :http_client)
+    end
+
+    test "provision fails when returned certificate is invalid" do
+      defmodule TestHttpClientBad do
+        def post(_url, _opts), do: {:ok, %{status: 200, body: %{"certificate" => "NOT_A_PEM"}}}
+      end
+
+      Application.put_env(:farm_node, :http_client, TestHttpClientBad)
+
+      assert {:error, {:storage_failed, :invalid_certificate_format}} =
+               Provisioning.provision("https://hub", "k", "farm-y")
+
+      Application.delete_env(:farm_node, :http_client)
+    end
+
+    # Note: A full integration test with a real Hub would verify the happy path fully
   end
 end

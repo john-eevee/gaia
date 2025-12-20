@@ -52,7 +52,7 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.CertificateAuthorityTest do
 
     test "rejects non-certificate PEM" do
       # Generate a private key (not a certificate)
-      private_key = :public_key.generate_key({:rsa, 2048, 65537})
+      private_key = :public_key.generate_key({:rsa, 2048, 65_537})
       pem_entry = :public_key.pem_entry_encode(:RSAPrivateKey, private_key)
       pem_string = :public_key.pem_encode([pem_entry])
 
@@ -64,7 +64,7 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.CertificateAuthorityTest do
   # Helper to generate a test certificate
   defp generate_test_certificate do
     # Generate a key pair
-    private_key = :public_key.generate_key({:rsa, 2048, 65537})
+    private_key = :public_key.generate_key({:rsa, 2048, 65_537})
 
     # Create a self-signed certificate using X509
     subject = X509.RDNSequence.new("/CN=test-farm/O=Test Org/C=US")

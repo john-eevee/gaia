@@ -37,7 +37,7 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.CertificateAuthority do
   defp generate_private_key do
     try do
       # Generate 4096-bit RSA key for strong security
-      private_key = :public_key.generate_key({:rsa, 4096, 65537})
+      private_key = :public_key.generate_key({:rsa, 4096, 65_537})
       pem_entry = :public_key.pem_entry_encode(:RSAPrivateKey, private_key)
       pem_string = :public_key.pem_encode([pem_entry])
 

@@ -1,0 +1,81 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: Farm Node CI
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "src/farm_node/**"
+      - ".github/workflows/farm_node.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "src/farm_node/**"
+      - ".github/workflows/farm_node.yml"
+
+permissions:
+  contents: read
+
+env:
+  MIX_ENV: test
+
+jobs:
+  test:
+    name: Farm Node CI Suite
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: src/farm_node
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Elixir
+        uses: jdx/mise-action@v3
+      - name: Setup hex and rebar
+        run: mix local.hex --force && mix local.rebar --force
+      - name: Cache deps
+        id: cache-deps
+        uses: actions/cache@v4
+        env:
+          cache-name: cache-elixir-deps
+        with:
+          path: src/hub/deps
+          key: ${{ runner.os }}-mix-${{ env.cache-name }}-${{ hashFiles('src/hub/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-${{ env.cache-name }}-
+      - name: Cache compiled build
+        id: cache-build
+        uses: actions/cache@v4
+        env:
+          cache-name: cache-compiled-build
+        with:
+          path: src/hub/_build
+          key: ${{ runner.os }}-mix-${{ env.cache-name }}-${{ hashFiles('src/hub/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-${{ env.cache-name }}-
+            ${{ runner.os }}-mix-
+      - name: Clean to rule out incremental build as a source of flakiness
+        if: github.run_attempt != '1'
+        run: |
+          mix deps.clean --all
+          mix clean
+        shell: sh
+      - name: Run CI
+        run: mix ci

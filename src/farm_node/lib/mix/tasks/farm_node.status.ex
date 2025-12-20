@@ -114,14 +114,13 @@ defmodule Mix.Tasks.FarmNode.Status do
 
     rdns
     |> List.flatten()
-    |> Enum.map(fn {:AttributeTypeAndValue, _oid, value} ->
+    |> Enum.map_join(", ", fn {:AttributeTypeAndValue, _oid, value} ->
       case value do
         {:utf8String, str} -> str
         {:printableString, str} -> to_string(str)
         _ -> inspect(value)
       end
     end)
-    |> Enum.join(", ")
   end
 
   defp extract_validity(cert) do
