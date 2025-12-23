@@ -296,10 +296,14 @@ defmodule Gaia.FarmNode.LocalRulesTest do
         %{id: "gps-1", type: :gps_tracker, location: %{lat: 35.0, lon: -120.0}, battery: 85}
       ]
 
-      for telemetry <- device_types do
+      device_types
+      |> Enum.with_index()
+      |> Enum.each(fn {telemetry, index} ->
+        # Add timestamp with slight offset for realism
+        Process.sleep(index * 10)
         telemetry = Map.put(telemetry, :timestamp, DateTime.utc_now())
         TelemetryStream.broadcast("telemetry:all", telemetry)
-      end
+      end)
 
       # None should trigger alerts
       refute_receive {:telemetry, "local_alerts", _}, 500
