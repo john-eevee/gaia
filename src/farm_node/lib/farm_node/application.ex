@@ -11,7 +11,8 @@ defmodule Gaia.FarmNode.Application do
       # Registry for devices
       {Registry, keys: :unique, name: Gaia.FarmNode.Device.Registry},
       Gaia.FarmNode.Device.TelemetryStream,
-      Gaia.FarmNode.Device.Supervisor
+      Gaia.FarmNode.Device.Supervisor,
+      Gaia.FarmNode.LocalRules
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
