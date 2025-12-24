@@ -8,7 +8,7 @@ The LocalRules Engine is a real-time telemetry processing system that evaluates 
 
 The LocalRules Engine is implemented as a GenServer that:
 
-1. **Subscribes to TelemetryStream**: Receives all telemetry events broadcasted by devices via the `telemetry:all` topic
+1. **Subscribes to EventStream**: Receives all telemetry events broadcasted by devices via the `telemetry:all` topic
 2. **Evaluates Rules**: Processes incoming telemetry against hardcoded rules
 3. **Triggers Alerts**: Broadcasts local alerts when rules are matched via the `local_alerts` topic
 
@@ -24,7 +24,7 @@ The LocalRules Engine is implemented as a GenServer that:
            │ broadcasts telemetry
            ▼
 ┌─────────────────────┐
-│  TelemetryStream    │
+│  EventStream    │
 │   (Pub/Sub via      │
 │    Registry)        │
 └──────────┬──────────┘
@@ -98,7 +98,7 @@ The LocalRules Engine is started as part of the FarmNode application supervision
 ```elixir
 children = [
   {Registry, keys: :unique, name: Gaia.FarmNode.Device.Registry},
-  Gaia.FarmNode.Device.TelemetryStream,
+  Gaia.FarmNode.EventStream,
   Gaia.FarmNode.Device.Supervisor,
   Gaia.FarmNode.LocalRules  # ← LocalRules Engine
 ]
@@ -120,7 +120,7 @@ The engine maintains state for monitoring and debugging:
 The engine processes telemetry as it arrives, with minimal latency:
 
 1. Device generates telemetry (e.g., every 5 seconds)
-2. TelemetryStream broadcasts to `telemetry:all`
+2. EventStream broadcasts to `telemetry:all`
 3. LocalRules Engine receives and evaluates immediately
 4. If rule matches, alert is broadcast within milliseconds
 

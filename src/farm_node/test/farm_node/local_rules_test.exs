@@ -2,7 +2,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
   use ExUnit.Case, async: false
 
   alias Gaia.FarmNode.LocalRules
-  alias Gaia.FarmNode.Device.TelemetryStream
+  alias Gaia.FarmNode.EventStream
   alias Gaia.FarmNode.Device.PestDetector
 
   setup do
@@ -40,7 +40,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
         battery: 100
       }
 
-      TelemetryStream.broadcast("telemetry:all", telemetry)
+      EventStream.broadcast("telemetry:all", telemetry)
 
       # Should receive an alert
       assert_receive {:telemetry, "local_alerts",
@@ -67,7 +67,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
         battery: 100
       }
 
-      TelemetryStream.broadcast("telemetry:all", telemetry)
+      EventStream.broadcast("telemetry:all", telemetry)
 
       # Should NOT receive an alert
       refute_receive {:telemetry, "local_alerts", _}, 500
@@ -83,7 +83,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
         battery: 100
       }
 
-      TelemetryStream.broadcast("telemetry:all", telemetry)
+      EventStream.broadcast("telemetry:all", telemetry)
 
       # Should NOT receive an alert
       refute_receive {:telemetry, "local_alerts", _}, 500
@@ -102,7 +102,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
         battery: 100
       }
 
-      TelemetryStream.broadcast("telemetry:all", telemetry)
+      EventStream.broadcast("telemetry:all", telemetry)
 
       # Wait for processing
       assert_receive {:telemetry, "local_alerts", _}, 1000
@@ -152,7 +152,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
           battery: 100
         }
 
-        TelemetryStream.broadcast("telemetry:all", telemetry)
+        EventStream.broadcast("telemetry:all", telemetry)
         
         # Wait for each alert to be processed
         assert_receive {:telemetry, "local_alerts", alert}, 1000
@@ -175,7 +175,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
         battery: 100
       }
 
-      TelemetryStream.broadcast("telemetry:all", telemetry1)
+      EventStream.broadcast("telemetry:all", telemetry1)
       assert_receive {:telemetry, "local_alerts", _}, 1000
 
       # Small delay
@@ -190,7 +190,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
         battery: 50
       }
 
-      TelemetryStream.broadcast("telemetry:all", telemetry2)
+      EventStream.broadcast("telemetry:all", telemetry2)
       assert_receive {:telemetry, "local_alerts", _}, 1000
 
       # Verify the last alert is from the second device
@@ -210,7 +210,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
         battery: 75
       }
 
-      TelemetryStream.broadcast("telemetry:all", telemetry)
+      EventStream.broadcast("telemetry:all", telemetry)
 
       assert_receive {:telemetry, "local_alerts", alert}, 1000
 
@@ -242,7 +242,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
         battery: 100
       }
 
-      TelemetryStream.broadcast("telemetry:all", telemetry)
+      EventStream.broadcast("telemetry:all", telemetry)
 
       assert_receive {:telemetry, "local_alerts", alert}, 1000
       assert alert.message =~ "specific-device-id-123"
@@ -259,7 +259,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
         battery: 100
       }
 
-      TelemetryStream.broadcast("telemetry:all", incomplete_telemetry)
+      EventStream.broadcast("telemetry:all", incomplete_telemetry)
 
       # Should NOT trigger an alert
       refute_receive {:telemetry, "local_alerts", _}, 500
@@ -277,7 +277,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
         another_field: 42
       }
 
-      TelemetryStream.broadcast("telemetry:all", extra_telemetry)
+      EventStream.broadcast("telemetry:all", extra_telemetry)
 
       # Should trigger alert normally
       assert_receive {:telemetry, "local_alerts", alert}, 1000
@@ -302,7 +302,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
         # Add timestamp with slight offset for realism
         Process.sleep(index * 10)
         telemetry = Map.put(telemetry, :timestamp, DateTime.utc_now())
-        TelemetryStream.broadcast("telemetry:all", telemetry)
+        EventStream.broadcast("telemetry:all", telemetry)
       end)
 
       # None should trigger alerts
@@ -326,7 +326,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
         battery: 100
       }
 
-      TelemetryStream.broadcast("telemetry:all", telemetry)
+      EventStream.broadcast("telemetry:all", telemetry)
 
       assert_receive {:telemetry, "local_alerts", _alert}, 1000
 

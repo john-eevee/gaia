@@ -1,10 +1,10 @@
-defmodule Gaia.FarmNode.Device.TelemetryStream do
+defmodule Gaia.FarmNode.EventStream do
   @moduledoc """
-  Simple pub/sub for device telemetry using Registry.
+  Simple pub/sub for event broadcasting within the FarmNode.
 
   Usage:
-    {:ok, _} = Gaia.FarmNode.Device.TelemetryStream.subscribe("pest_events")
-    Gaia.FarmNode.Device.TelemetryStream.broadcast("pest_events", %{pest_detected: true})
+      {:ok, _} = Gaia.FarmNode.EventStream.subscribe("pest_events")
+    Gaia.FarmNode.EventStream.broadcast("pest_events", %{pest_detected: true})
   """
 
   @registry __MODULE__

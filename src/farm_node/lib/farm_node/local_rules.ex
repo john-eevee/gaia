@@ -3,13 +3,13 @@ defmodule Gaia.FarmNode.LocalRules do
   LocalRules Engine (V1) - Processes telemetry and evaluates rules locally without Hub connectivity.
 
   This module implements a basic rule evaluator that acts on telemetry data in real-time.
-  It subscribes to the TelemetryStream and evaluates hardcoded rules against incoming telemetry.
+  It subscribes to the EventStream and evaluates hardcoded rules against incoming telemetry.
   """
 
   use GenServer
   require Logger
 
-  alias Gaia.FarmNode.Device.TelemetryStream
+  alias Gaia.FarmNode.EventStream
 
   @type alert :: %{
           type: atom(),
@@ -31,7 +31,7 @@ defmodule Gaia.FarmNode.LocalRules do
   Subscribe to local alerts triggered by the rules engine.
   """
   def subscribe_alerts do
-    TelemetryStream.subscribe("local_alerts")
+    EventStream.subscribe("local_alerts")
   end
 
   @doc """
@@ -46,7 +46,7 @@ defmodule Gaia.FarmNode.LocalRules do
   @impl true
   def init(_opts) do
     # Subscribe to all telemetry events
-    {:ok, _} = TelemetryStream.subscribe("telemetry:all")
+    {:ok, _} = EventStream.subscribe("telemetry:all")
     Logger.info("LocalRules engine started and subscribed to telemetry")
 
     state = %{
@@ -73,7 +73,7 @@ defmodule Gaia.FarmNode.LocalRules do
 
   # Evaluate all hardcoded rules against telemetry
   defp evaluate_rules(telemetry, state) do
-    # Rule 1: IF TelemetryStream contains pest-type-A THEN trigger LocalAlert
+    # Rule 1: IF EventStream contains pest-type-A THEN trigger LocalAlert
     state = evaluate_pest_detection_rule(telemetry, state)
 
     state
@@ -92,7 +92,7 @@ defmodule Gaia.FarmNode.LocalRules do
         }
 
         # Broadcast the alert
-        TelemetryStream.broadcast("local_alerts", alert)
+        EventStream.broadcast("local_alerts", alert)
 
         Logger.warning("LocalRule triggered: #{alert.message}")
 

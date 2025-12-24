@@ -1,7 +1,7 @@
 defmodule Gaia.FarmNode.Device.GpsTrackerTest do
   use ExUnit.Case, async: false
 
-  alias Gaia.FarmNode.Device.TelemetryStream
+  alias Gaia.FarmNode.EventStream
   alias Gaia.FarmNode.Device.GpsTracker
 
   setup do
@@ -10,7 +10,7 @@ defmodule Gaia.FarmNode.Device.GpsTrackerTest do
   end
 
   test "gps tracker broadcasts location and battery" do
-    TelemetryStream.subscribe("telemetry:gps_tracker")
+    EventStream.subscribe("telemetry:gps_tracker")
 
     {:ok, _} = GpsTracker.start_link(id: "gps-1", interval: 50, battery: 88)
 

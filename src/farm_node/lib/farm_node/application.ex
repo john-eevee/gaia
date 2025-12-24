@@ -10,7 +10,7 @@ defmodule Gaia.FarmNode.Application do
     children = [
       # Registry for devices
       {Registry, keys: :unique, name: Gaia.FarmNode.Device.Registry},
-      Gaia.FarmNode.Device.TelemetryStream,
+      Gaia.FarmNode.EventStream,
       Gaia.FarmNode.Device.Supervisor,
       Gaia.FarmNode.LocalRules
     ]

@@ -1,7 +1,7 @@
 defmodule Gaia.FarmNode.Device.MoistureSensorTest do
   use ExUnit.Case, async: false
 
-  alias Gaia.FarmNode.Device.TelemetryStream
+  alias Gaia.FarmNode.EventStream
   alias Gaia.FarmNode.Device.MoistureSensor
 
   setup do
@@ -10,7 +10,7 @@ defmodule Gaia.FarmNode.Device.MoistureSensorTest do
   end
 
   test "moisture sensor broadcasts moisture" do
-    TelemetryStream.subscribe("telemetry:moisture_sensor")
+    EventStream.subscribe("telemetry:moisture_sensor")
 
     {:ok, _} = MoistureSensor.start_link(id: "moist-1", interval: 50, battery: 66)
 

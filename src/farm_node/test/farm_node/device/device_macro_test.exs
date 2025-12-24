@@ -9,7 +9,7 @@ defmodule Gaia.DeviceMacroTest do
   end
 
   test "can start module-defined device with custom telemetry" do
-    Gaia.FarmNode.Device.TelemetryStream.subscribe("telemetry:temperature_sensor")
+    Gaia.FarmNode.EventStream.subscribe("telemetry:temperature_sensor")
     {:ok, _} = TempSensor.start_link(id: "temp-1", interval: 50, battery: 90)
     assert_receive {:telemetry, "telemetry:temperature_sensor", payload}, 500
     assert payload.type == :temperature_sensor
