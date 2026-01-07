@@ -30,7 +30,7 @@ defmodule Gaia.FarmNode.EventStream do
   def broadcast(topic, payload) when is_binary(topic) or is_atom(topic) do
     Registry.dispatch(@registry, topic, fn entries ->
       for {pid, _} <- entries do
-        send(pid, {:telemetry, topic, payload})
+        send(pid, {:event, topic, payload})
       end
     end)
   end
