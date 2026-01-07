@@ -40,16 +40,17 @@ defmodule Gaia.FarmNode.HubConnection.EventDispatcher do
 
   @impl true
   def init(_opts) do
-    # Subscribe to Hub events
-    {:ok, _} = EventStream.subscribe("farm:*")
-    Logger.info("EventDispatcher started and subscribed to Hub events")
+    # Subscribe to telemetry:all so we can pattern-match on topic names
+    {:ok, _} = EventStream.subscribe("telemetry:all")
+    Logger.info("EventDispatcher started and subscribed to telemetry:all")
 
     {:ok, %{buffer: [], size: 0}}
   end
 
   @impl true
-  def handle_info({:event, event}, state) do
-    state = add_event(event, state)
+  def handle_info({:telemetry, topic, payload}, state) do
+    # Normalize envelope into {topic, payload} so flush gets both pieces
+    state = add_event({topic, payload}, state)
     {:noreply, state, {:continue, {:flush_buffer, :if_full}}}
   end
 

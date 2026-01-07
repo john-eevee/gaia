@@ -5,6 +5,8 @@ defmodule Gaia.FarmNode.EventStream do
   Usage:
       {:ok, _} = Gaia.FarmNode.EventStream.subscribe("pest_events")
     Gaia.FarmNode.EventStream.broadcast("pest_events", %{pest_detected: true})
+    # Subscribers will receive messages using the telemetry envelope:
+    #   {:telemetry, "pest_events", %{pest_detected: true}}
   """
 
   @registry __MODULE__
@@ -26,11 +28,11 @@ defmodule Gaia.FarmNode.EventStream do
     Registry.unregister(@registry, topic)
   end
 
-  @doc "Broadcast a payload to all subscribers of a topic"
+  @doc "Broadcast a payload to all subscribers of a topic (messages are sent as {:telemetry, topic, payload})"
   def broadcast(topic, payload) when is_binary(topic) or is_atom(topic) do
     Registry.dispatch(@registry, topic, fn entries ->
       for {pid, _} <- entries do
-        send(pid, {:event, topic, payload})
+        send(pid, {:telemetry, topic, payload})
       end
     end)
   end
