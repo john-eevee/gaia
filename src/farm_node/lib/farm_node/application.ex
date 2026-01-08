@@ -12,6 +12,9 @@ defmodule Gaia.FarmNode.Application do
       {Registry, keys: :unique, name: Gaia.FarmNode.Device.Registry},
       Gaia.FarmNode.EventStream,
       Gaia.FarmNode.Device.Supervisor,
+      # Parallel telemetry processors (per ADR-006)
+      Gaia.FarmNode.TelemetryStorage,
+      Gaia.FarmNode.TelemetrySharing,
       Gaia.FarmNode.LocalRules
     ]
 
