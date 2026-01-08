@@ -1,22 +1,22 @@
 defmodule Gaia.FarmNode.HubConnection.EventDispatcher do
   @moduledoc """
-  Dispatches events received from the Hub to local subscribers.
+  Dispatches hub-facing events and device telemetry for batching and forwarding to the Hub.
 
-  This module listens for events from the Hub connection and forwards them
-  to interested local processes via the EventStream.
+  This module listens for local EventStream messages and batches them for
+  outbound dispatch to the Hub. The buffering mechanism is implemented to
+  batch events before dispatching and can be configured via application settings:
 
-  The buffering mechanism is implemented to batch events before dispatching,
-  and it can be configured via application settings:
-
-    - `:buffer_size` - Maximum number of events to buffer
-    before flushing (default: 10)
-    - `:flush_interval` - Time interval (in milliseconds)
-    to flush the buffer (default: 5000)
+    - `:buffer_size` - Maximum number of events to buffer before flushing (default: 10)
+    - `:flush_interval` - Time interval (in milliseconds) to flush the buffer (default: 5000)
+    - `:subscriptions` - List of EventStream topics to subscribe to. Defaults to
+      ["telemetry:all", "event:all"] so the dispatcher receives device telemetry
+      and hub-facing local events.
 
   ## Configuration
-      config :farm_node, :event_dispatcher
+      config :farm_node, :event_dispatcher,
         buffer_size: 20,
-        flush_interval: 10_000
+        flush_interval: 10_000,
+        subscriptions: ["telemetry:all", "event:all"]
   """
 
   use GenServer
@@ -40,15 +40,33 @@ defmodule Gaia.FarmNode.HubConnection.EventDispatcher do
 
   @impl true
   def init(_opts) do
-    # Subscribe to telemetry:all so we can pattern-match on topic names
-    {:ok, _} = EventStream.subscribe("telemetry:all")
-    Logger.info("EventDispatcher started and subscribed to telemetry:all")
+    # Subscribe to configured topics so we capture device telemetry and
+    # hub-facing events. Registry keys are exact matches; subscribe to all
+    # configured topics.
+    topics = subscribed_topics()
 
-    {:ok, %{buffer: [], size: 0}}
+    Enum.each(topics, fn topic ->
+      {:ok, _} = EventStream.subscribe(topic)
+    end)
+
+    Logger.info("EventDispatcher started and subscribed to " <> Enum.join(topics, ", "))
+
+    {:ok, %{buffer: [], size: 0}, {:continue, :schedule_flush}}
+  end
+
+  @impl true
+  def handle_info({:event, topic, payload}, state) do
+    # Handle inbound hub-facing events
+    handle_incoming_event(topic, payload, state)
   end
 
   @impl true
   def handle_info({:telemetry, topic, payload}, state) do
+    # Handle inbound device telemetry
+    handle_incoming_event(topic, payload, state)
+  end
+
+  defp handle_incoming_event(topic, payload, state) do
     # Normalize envelope into {topic, payload} so flush gets both pieces
     state = add_event({topic, payload}, state)
     {:noreply, state, {:continue, {:flush_buffer, :if_full}}}
@@ -119,10 +137,15 @@ defmodule Gaia.FarmNode.HubConnection.EventDispatcher do
     Keyword.get(config(), :flush_interval, @default_flush_interval)
   end
 
+  defp subscribed_topics do
+    Keyword.get(config(), :subscriptions, ["telemetry:all", "event:all"])
+  end
+
   defp config do
     Application.get_env(:farm_node, :event_dispatcher,
       buffer_size: @default_buffer_size,
-      flush_interval: @default_flush_interval
+      flush_interval: @default_flush_interval,
+      subscriptions: ["telemetry:all", "event:all"]
     )
   end
 

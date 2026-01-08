@@ -46,7 +46,7 @@ defmodule Gaia.FarmNode.EventTest do
 
   defp temperature_changeset(data) do
     schema = %{temperature: :float, humidity: :integer}
-    data = %{temperature: 22.5, humidity: 60}
+    # Use the provided data argument
 
     changeset =
       Ecto.Changeset.cast(
