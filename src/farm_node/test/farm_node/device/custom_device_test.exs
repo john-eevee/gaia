@@ -21,7 +21,7 @@ defmodule Gaia.Device.CustomDeviceTest do
     :ok
   end
 
-  test "custom device generates custom telemetry" do
+  test "custom device generates custom events" do
     EventStream.subscribe("telemetry:custom_sensor")
 
     {:ok, _} = CustomDevice.start_link(id: "custom-1", interval: 50, battery: 75)

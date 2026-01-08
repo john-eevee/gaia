@@ -21,7 +21,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
       assert Process.whereis(LocalRules) != nil
     end
 
-    test "subscribes to telemetry stream on init" do
+    test "subscribes to event stream on init" do
       # Verify the engine is running and has a state
       state = LocalRules.get_state()
       assert is_map(state)
@@ -43,7 +43,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
       EventStream.broadcast("telemetry:all", telemetry)
 
       # Should receive an alert
-      assert_receive {:telemetry, "local_alerts",
+      assert_receive {:event, "local_alerts",
                       %{
                         type: :pest_detected,
                         message: message,
@@ -70,7 +70,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
       EventStream.broadcast("telemetry:all", telemetry)
 
       # Should NOT receive an alert
-      refute_receive {:telemetry, "local_alerts", _}, 500
+      refute_receive {:event, "local_alerts", _}, 500
     end
 
     test "does not trigger alert for non-pest detector telemetry" do
@@ -86,7 +86,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
       EventStream.broadcast("telemetry:all", telemetry)
 
       # Should NOT receive an alert
-      refute_receive {:telemetry, "local_alerts", _}, 500
+      refute_receive {:event, "local_alerts", _}, 500
     end
 
     test "increments alerts_triggered counter" do
@@ -105,7 +105,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
       EventStream.broadcast("telemetry:all", telemetry)
 
       # Wait for processing
-      assert_receive {:telemetry, "local_alerts", _}, 1000
+      assert_receive {:event, "local_alerts", _}, 1000
 
       # Check that counter increased
       new_state = LocalRules.get_state()
@@ -124,7 +124,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
       # Wait for telemetry broadcasts and check if alerts are triggered
       # Note: Since pest detection is random (10% chance), we'll just verify
       # that the engine processes the telemetry without errors
-      
+
       # Give it some time to generate at least one telemetry event
       Process.sleep(200)
 
@@ -153,9 +153,9 @@ defmodule Gaia.FarmNode.LocalRulesTest do
         }
 
         EventStream.broadcast("telemetry:all", telemetry)
-        
+
         # Wait for each alert to be processed
-        assert_receive {:telemetry, "local_alerts", alert}, 1000
+        assert_receive {:event, "local_alerts", alert}, 1000
         assert alert.type == :pest_detected
         assert alert.message =~ "pest-sensor-multi-#{i}"
       end
@@ -176,7 +176,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
       }
 
       EventStream.broadcast("telemetry:all", telemetry1)
-      assert_receive {:telemetry, "local_alerts", _}, 1000
+      assert_receive {:event, "local_alerts", _}, 1000
 
       # Small delay
       Process.sleep(50)
@@ -191,7 +191,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
       }
 
       EventStream.broadcast("telemetry:all", telemetry2)
-      assert_receive {:telemetry, "local_alerts", _}, 1000
+      assert_receive {:event, "local_alerts", _}, 1000
 
       # Verify the last alert is from the second device
       state = LocalRules.get_state()
@@ -212,7 +212,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
 
       EventStream.broadcast("telemetry:all", telemetry)
 
-      assert_receive {:telemetry, "local_alerts", alert}, 1000
+      assert_receive {:event, "local_alerts", alert}, 1000
 
       # Verify alert structure
       assert Map.has_key?(alert, :type)
@@ -244,7 +244,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
 
       EventStream.broadcast("telemetry:all", telemetry)
 
-      assert_receive {:telemetry, "local_alerts", alert}, 1000
+      assert_receive {:event, "local_alerts", alert}, 1000
       assert alert.message =~ "specific-device-id-123"
     end
   end
@@ -259,10 +259,10 @@ defmodule Gaia.FarmNode.LocalRulesTest do
         battery: 100
       }
 
-      EventStream.broadcast("telemetry:all", incomplete_telemetry)
+      EventStream.broadcast("event:all", incomplete_telemetry)
 
       # Should NOT trigger an alert
-      refute_receive {:telemetry, "local_alerts", _}, 500
+      refute_receive {:event, "local_alerts", _}, 500
     end
 
     test "handles telemetry with extra fields gracefully" do
@@ -280,9 +280,9 @@ defmodule Gaia.FarmNode.LocalRulesTest do
       EventStream.broadcast("telemetry:all", extra_telemetry)
 
       # Should trigger alert normally
-      assert_receive {:telemetry, "local_alerts", alert}, 1000
+      assert_receive {:event, "local_alerts", alert}, 1000
       assert alert.type == :pest_detected
-      
+
       # Extra fields should be preserved in telemetry
       assert alert.telemetry.extra_field == "should be ignored"
       assert alert.telemetry.another_field == 42
@@ -306,7 +306,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
       end)
 
       # None should trigger alerts
-      refute_receive {:telemetry, "local_alerts", _}, 500
+      refute_receive {:event, "local_alerts", _}, 500
 
       # Engine should still be operational
       state = LocalRules.get_state()
@@ -328,7 +328,7 @@ defmodule Gaia.FarmNode.LocalRulesTest do
 
       EventStream.broadcast("telemetry:all", telemetry)
 
-      assert_receive {:telemetry, "local_alerts", _alert}, 1000
+      assert_receive {:event, "local_alerts", _alert}, 1000
 
       end_time = System.monotonic_time(:millisecond)
       latency = end_time - start_time

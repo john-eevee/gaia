@@ -7,7 +7,7 @@ defmodule Gaia.FarmNode.EventStreamTest do
     {:ok, _} = subscribe_to_test_topic()
     EventStream.broadcast("test_topic", %{foo: :bar})
 
-    assert_receive {:telemetry, "test_topic", %{foo: :bar}}, 500
+    assert_receive {:event, "test_topic", %{foo: :bar}}, 500
   end
 
   test "unsubscribe should not receive messages after unsubscribing" do
@@ -15,7 +15,7 @@ defmodule Gaia.FarmNode.EventStreamTest do
     :ok = EventStream.unsubscribe("test_topic")
     EventStream.broadcast("test_topic", %{foo: :bar})
 
-    refute_receive {:telemetry, "test_topic", %{foo: :bar}}, 500
+    refute_receive {:event, "test_topic", %{foo: :bar}}, 500
   end
 
   defp subscribe_to_test_topic do

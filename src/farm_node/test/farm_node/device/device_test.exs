@@ -20,8 +20,7 @@ defmodule Gaia.FarmNode.DeviceTest do
     assert payload.type == :pest_detector
     assert Map.has_key?(payload, :pest_detected)
 
-    assert_receive {:telemetry, "device_status",
-                    %{id: "dev-1", status: status, battery: battery}},
+    assert_receive {:event, "device_status", %{id: "dev-1", status: status, battery: battery}},
                    200
 
     assert status in [:online, :offline, :low_battery]

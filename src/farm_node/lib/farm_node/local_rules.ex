@@ -45,9 +45,9 @@ defmodule Gaia.FarmNode.LocalRules do
 
   @impl true
   def init(_opts) do
-    # Subscribe to all telemetry events
+    # Subscribe to device telemetry (incoming device data)
     {:ok, _} = EventStream.subscribe("telemetry:all")
-    Logger.info("LocalRules engine started and subscribed to telemetry")
+    Logger.info("LocalRules engine started and subscribed to telemetry:all")
 
     state = %{
       alerts_triggered: 0,
