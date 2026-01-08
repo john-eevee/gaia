@@ -1,7 +1,7 @@
 defmodule Gaia.Device.CustomDeviceTest do
   use ExUnit.Case, async: false
 
-  alias Gaia.FarmNode.Device.TelemetryStream
+  alias Gaia.FarmNode.EventStream
 
   defmodule CustomDevice do
     use Gaia.Device, type: :custom_sensor
@@ -21,8 +21,8 @@ defmodule Gaia.Device.CustomDeviceTest do
     :ok
   end
 
-  test "custom device generates custom telemetry" do
-    TelemetryStream.subscribe("telemetry:custom_sensor")
+  test "custom device generates custom events" do
+    EventStream.subscribe("telemetry:custom_sensor")
 
     {:ok, _} = CustomDevice.start_link(id: "custom-1", interval: 50, battery: 75)
 

@@ -6,7 +6,7 @@ defmodule Gaia.Device do
   - Schedules periodic telemetry broadcasts
   - Manages device status (online/offline/low_battery)
   - Simulates battery drain
-  - Broadcasts telemetry via TelemetryStream
+  - Broadcasts telemetry via EventStream
 
   ## Example
 
@@ -45,7 +45,7 @@ defmodule Gaia.Device do
     quote location: :keep do
       use GenServer
       require Logger
-      alias Gaia.FarmNode.Device.TelemetryStream
+      alias Gaia.FarmNode.EventStream
 
       @behaviour Gaia.Device
       @device_type unquote(type)
@@ -116,7 +116,7 @@ defmodule Gaia.Device do
         if battery < 20 and state.status != :low_battery do
           state = %{state | status: :low_battery}
 
-          TelemetryStream.broadcast("device_status", %{
+          EventStream.broadcast("device_status", %{
             id: state.id,
             status: :low_battery,
             battery: battery
@@ -136,11 +136,11 @@ defmodule Gaia.Device do
           })
 
         # Broadcast telemetry
-        TelemetryStream.broadcast("telemetry:#{state.type}", telemetry)
-        TelemetryStream.broadcast("telemetry:all", telemetry)
+        EventStream.broadcast("telemetry:#{state.type}", telemetry)
+        EventStream.broadcast("telemetry:all", telemetry)
 
         # Always broadcast device status
-        TelemetryStream.broadcast("device_status", %{
+        EventStream.broadcast("device_status", %{
           id: state.id,
           status: state.status,
           battery: battery

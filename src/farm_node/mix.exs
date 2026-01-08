@@ -30,6 +30,7 @@ defmodule Gaia.FarmNode.MixProject do
   defp deps do
     [
       {:req, "~> 0.5"},
+      {:ecto, "~> 3.13"},
       {:mox, "~> 1.0", only: :test}
     ]
   end

@@ -3,7 +3,7 @@ defmodule Gaia.FarmNode.Device.SupervisorTest do
 
   alias Gaia.FarmNode.Device.Supervisor
   alias Gaia.FarmNode.Device.TempSensor
-  alias Gaia.FarmNode.Device.TelemetryStream
+  alias Gaia.FarmNode.EventStream
 
   setup do
     Application.ensure_all_started(:farm_node)
@@ -14,7 +14,7 @@ defmodule Gaia.FarmNode.Device.SupervisorTest do
     # Supervisor is started by the application; starting again may return
     # {:error, {:already_started, pid}}. We don't require start_link here.
 
-    TelemetryStream.subscribe("telemetry:temperature_sensor")
+    EventStream.subscribe("telemetry:temperature_sensor")
 
     assert {:ok, _pid} =
              Supervisor.start_device(
