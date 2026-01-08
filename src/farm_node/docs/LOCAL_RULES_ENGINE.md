@@ -4,6 +4,13 @@
 
 The LocalRules Engine is a real-time telemetry processing system that evaluates rules locally without requiring Hub connectivity. It implements the principle of **Farmer Autonomy** from ADR-001, ensuring that local operations can continue independently of the Hub.
 
+Per **ADR-006**, LocalRules is one of three parallel telemetry processors:
+- **TelemetryStorage**: Persists all telemetry locally
+- **TelemetrySharing**: Acts as the data sharing gate (checks DataSharingPolicy)
+- **LocalRules**: Evaluates rules and generates alerts
+
+All three subscribe to the same telemetry source and run independently in parallel.
+
 ## Architecture
 
 The LocalRules Engine is implemented as a GenServer that:
@@ -11,6 +18,8 @@ The LocalRules Engine is implemented as a GenServer that:
 1. **Subscribes to EventStream**: Receives all telemetry events broadcasted by devices via the `telemetry:all` topic
 2. **Evaluates Rules**: Processes incoming telemetry against hardcoded rules
 3. **Triggers Alerts**: Broadcasts local alerts when rules are matched via the `local_alerts` topic
+
+**Note**: LocalRules does NOT check DataSharingPolicy - that responsibility belongs to TelemetrySharing.
 
 ### Components
 
@@ -24,25 +33,29 @@ The LocalRules Engine is implemented as a GenServer that:
            │ broadcasts telemetry
            ▼
 ┌─────────────────────┐
-│  EventStream    │
+│    EventStream      │
 │   (Pub/Sub via      │
 │    Registry)        │
-└──────────┬──────────┘
-           │
-           │ telemetry:all
-           ▼
-┌─────────────────────┐
-│  LocalRules Engine  │
-│  - Evaluates rules  │
-│  - Triggers alerts  │
-└──────────┬──────────┘
-           │
-           │ broadcasts alerts
-           ▼
-┌─────────────────────┐
-│    local_alerts     │
-│      (Topic)        │
-└─────────────────────┘
+└──────┬───┬────┬─────┘
+       │   │    │
+       │   │    │ telemetry:all (parallel subscriptions)
+       ▼   ▼    ▼
+    ┌────┐┌────┐┌──────────────┐
+    │TS  ││TSH ││LocalRules    │
+    │    ││    ││- Eval rules  │
+    └────┘└────┘│- Trigger     │
+                │  alerts      │
+                └──────┬───────┘
+                       │
+                       │ broadcasts alerts
+                       ▼
+                ┌─────────────┐
+                │local_alerts │
+                │   (Topic)   │
+                └─────────────┘
+
+TS  = TelemetryStorage
+TSH = TelemetrySharing
 ```
 
 ## Current Rules (V1)
