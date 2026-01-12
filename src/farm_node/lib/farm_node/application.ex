@@ -15,7 +15,9 @@ defmodule Gaia.FarmNode.Application do
       # Parallel telemetry processors (per ADR-006)
       Gaia.FarmNode.TelemetryStorage,
       Gaia.FarmNode.TelemetrySharing,
-      Gaia.FarmNode.LocalRules
+      Gaia.FarmNode.LocalRules,
+      # Hub connection heartbeat with mTLS
+      Gaia.FarmNode.HubConnection.Heartbeat
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
