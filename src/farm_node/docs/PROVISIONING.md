@@ -13,6 +13,7 @@ The provisioning system is organized within the `HubConnection` bounded context:
 ```
 lib/farm_node/hub_connection/
 ├── provisioning.ex                              # Main orchestrator
+├── heartbeat.ex                                 # mTLS heartbeat service
 └── provisioning/
     ├── certificate_authority.ex                 # CSR generation & validation
     ├── client.ex                                # HTTP client for Hub API
@@ -140,11 +141,15 @@ Private keys are stored with restrictive permissions:
 
 ### 3. Certificate Revocation
 
-If the Hub revokes a node's certificate:
-- The node will receive a `403 Forbidden` during heartbeat
-- All Hub communication ceases immediately
-- Local operations continue (offline-first design)
-- Local user is alerted
+The Farm Node maintains an active connection with the Hub through periodic heartbeats:
+- Heartbeats are sent every 5 minutes to `/api/v1/heartbeat` using mTLS
+- If the Hub revokes a node's certificate:
+  - The heartbeat receives a `403 Forbidden` response
+  - All Hub communication ceases immediately
+  - Local credentials are revoked automatically
+  - Local operations continue (offline-first design)
+  - Local user is alerted
+- Network failures are handled gracefully (logged but ignored, allowing offline operation)
 
 ## Testing
 
@@ -214,6 +219,21 @@ Returns `{:ok, %{csr: pem, private_key: pem}}`.
 #### `validate_certificate(cert_pem)`
 
 Validates a certificate PEM string.
+
+### `Gaia.FarmNode.HubConnection.Heartbeat`
+
+Manages periodic heartbeat communication with the Hub using mTLS.
+
+#### `start_link(opts \\ [])`
+
+Starts the Heartbeat GenServer. Automatically started by the Application supervisor.
+
+The heartbeat service:
+- Sends periodic heartbeats (every 5 minutes) to the Hub's `/api/v1/heartbeat` endpoint
+- Uses mTLS authentication with the provisioned certificate
+- Only starts if the node is provisioned and has a configured Hub address
+- Handles revocation by stopping all Hub communication
+- Handles network errors gracefully (logs and continues for offline scenarios)
 
 ## Future Enhancements
 
