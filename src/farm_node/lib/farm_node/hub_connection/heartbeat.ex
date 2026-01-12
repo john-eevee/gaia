@@ -153,45 +153,34 @@ defmodule Gaia.FarmNode.HubConnection.Heartbeat do
   end
 
   defp extract_cert_der(pem_string) do
-    case :public_key.pem_decode(pem_string) do
-      [{:Certificate, cert_der, :not_encrypted}] ->
-        {:ok, cert_der}
-
-      [{:Certificate, _, _}] ->
-        {:error, :encrypted_certificate}
-
-      [] ->
-        {:error, :no_certificate_found}
-
-      [_ | _] ->
-        {:error, :multiple_certificates_found}
-
-      _ ->
-        {:error, :invalid_certificate_format}
+    try do
+      cert = X509.Certificate.from_pem!(pem_string)
+      cert_der = X509.Certificate.to_der(cert)
+      {:ok, cert_der}
+    rescue
+      _ -> {:error, :invalid_certificate}
     end
-  rescue
-    _ -> {:error, :invalid_certificate}
   end
 
   defp extract_key_der(pem_string) do
-    case :public_key.pem_decode(pem_string) do
-      [{key_type, key_der, :not_encrypted}] when key_type in [:RSAPrivateKey, :ECPrivateKey, :PrivateKeyInfo] ->
-        {:ok, {key_type, key_der}}
-
-      [{_, _, _}] ->
-        {:error, :encrypted_or_invalid_key}
-
-      [] ->
-        {:error, :no_key_found}
-
-      [_ | _] ->
-        {:error, :multiple_keys_found}
-
-      _ ->
-        {:error, :invalid_key_format}
+    try do
+      key = X509.PrivateKey.from_pem!(pem_string)
+      # X509.PrivateKey.to_der returns the key in a format suitable for SSL
+      key_der = X509.PrivateKey.to_der(key)
+      # Determine key type from the decoded key structure
+      key_type = determine_key_type(key)
+      {:ok, {key_type, key_der}}
+    rescue
+      _ -> {:error, :invalid_key}
     end
-  rescue
-    _ -> {:error, :invalid_key}
+  end
+
+  defp determine_key_type(key) do
+    case key do
+      {:RSAPrivateKey, _, _, _, _, _, _, _, _, _, _} -> :RSAPrivateKey
+      {:ECPrivateKey, _, _, _, _} -> :ECPrivateKey
+      _ -> :PrivateKeyInfo
+    end
   end
 
   defp build_url(hub_address, path) do
