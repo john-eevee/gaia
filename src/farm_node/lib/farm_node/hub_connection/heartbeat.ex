@@ -153,24 +153,45 @@ defmodule Gaia.FarmNode.HubConnection.Heartbeat do
   end
 
   defp extract_cert_der(pem_string) do
-    try do
-      [{:Certificate, cert_der, :not_encrypted}] = :public_key.pem_decode(pem_string)
-      {:ok, cert_der}
-    rescue
-      _ -> {:error, :invalid_certificate}
+    case :public_key.pem_decode(pem_string) do
+      [{:Certificate, cert_der, :not_encrypted}] ->
+        {:ok, cert_der}
+
+      [{:Certificate, _, _}] ->
+        {:error, :encrypted_certificate}
+
+      [] ->
+        {:error, :no_certificate_found}
+
+      [_ | _] ->
+        {:error, :multiple_certificates_found}
+
+      _ ->
+        {:error, :invalid_certificate_format}
     end
+  rescue
+    _ -> {:error, :invalid_certificate}
   end
 
   defp extract_key_der(pem_string) do
-    try do
-      [pem_entry] = :public_key.pem_decode(pem_string)
-      {key_type, key_der, :not_encrypted} = pem_entry
+    case :public_key.pem_decode(pem_string) do
+      [{key_type, key_der, :not_encrypted}] when key_type in [:RSAPrivateKey, :ECPrivateKey, :PrivateKeyInfo] ->
+        {:ok, {key_type, key_der}}
 
-      # Return as a tuple expected by SSL
-      {:ok, {key_type, key_der}}
-    rescue
-      _ -> {:error, :invalid_key}
+      [{_, _, _}] ->
+        {:error, :encrypted_or_invalid_key}
+
+      [] ->
+        {:error, :no_key_found}
+
+      [_ | _] ->
+        {:error, :multiple_keys_found}
+
+      _ ->
+        {:error, :invalid_key_format}
     end
+  rescue
+    _ -> {:error, :invalid_key}
   end
 
   defp build_url(hub_address, path) do
