@@ -107,14 +107,15 @@ defmodule Gaia.FarmNode.HubConnection.Heartbeat do
     http_client = Application.get_env(:farm_node, :http_client, Req)
 
     # Parse PEM certificates and keys for mTLS
-    # Req expects decoded certificates and keys, not PEM strings
-    with {:ok, cert} <- parse_certificate(credentials.cert),
-         {:ok, key} <- parse_private_key(credentials.key) do
+    # Extract DER from PEM for SSL options
+    with {:ok, cert_der} <- extract_cert_der(credentials.cert),
+         {:ok, key_tuple} <- extract_key_der(credentials.key) do
       # Configure mTLS by providing the certificate and private key
+      # SSL options expect DER-encoded cert and key tuple
       connect_options = [
         transport_opts: [
-          cert: cert,
-          key: key,
+          cert: cert_der,
+          key: key_tuple,
           verify: :verify_peer,
           cacerts: :public_key.cacerts_get()
         ]
@@ -151,21 +152,22 @@ defmodule Gaia.FarmNode.HubConnection.Heartbeat do
     end
   end
 
-  defp parse_certificate(pem_string) do
+  defp extract_cert_der(pem_string) do
     try do
-      [cert_entry | _] = :public_key.pem_decode(pem_string)
-      cert = :public_key.pem_entry_decode(cert_entry)
-      {:ok, cert}
+      [{:Certificate, cert_der, :not_encrypted}] = :public_key.pem_decode(pem_string)
+      {:ok, cert_der}
     rescue
       _ -> {:error, :invalid_certificate}
     end
   end
 
-  defp parse_private_key(pem_string) do
+  defp extract_key_der(pem_string) do
     try do
-      [key_entry | _] = :public_key.pem_decode(pem_string)
-      key = :public_key.pem_entry_decode(key_entry)
-      {:ok, key}
+      [pem_entry] = :public_key.pem_decode(pem_string)
+      {key_type, key_der, :not_encrypted} = pem_entry
+
+      # Return as a tuple expected by SSL
+      {:ok, {key_type, key_der}}
     rescue
       _ -> {:error, :invalid_key}
     end
