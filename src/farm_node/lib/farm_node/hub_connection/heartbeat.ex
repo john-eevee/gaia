@@ -165,21 +165,18 @@ defmodule Gaia.FarmNode.HubConnection.Heartbeat do
   defp extract_key_der(pem_string) do
     try do
       key = X509.PrivateKey.from_pem!(pem_string)
-      # X509.PrivateKey.to_der returns the key in a format suitable for SSL
+      # X509.PrivateKey.to_der returns the key in DER format
       key_der = X509.PrivateKey.to_der(key)
-      # Determine key type from the decoded key structure
-      key_type = determine_key_type(key)
+      # Determine key type from the key structure
+      key_type = case key do
+        {:RSAPrivateKey, _, _, _, _, _, _, _, _, _, _} -> :RSAPrivateKey
+        {:ECPrivateKey, _, _, _, _} -> :ECPrivateKey
+        {:PrivateKeyInfo, _} -> :PrivateKeyInfo
+        _ -> :RSAPrivateKey  # Default to RSA for compatibility
+      end
       {:ok, {key_type, key_der}}
     rescue
       _ -> {:error, :invalid_key}
-    end
-  end
-
-  defp determine_key_type(key) do
-    case key do
-      {:RSAPrivateKey, _, _, _, _, _, _, _, _, _, _} -> :RSAPrivateKey
-      {:ECPrivateKey, _, _, _, _} -> :ECPrivateKey
-      _ -> :PrivateKeyInfo
     end
   end
 
