@@ -66,12 +66,6 @@ defmodule Gaia.FarmNode.HubConnection.EventDispatcher do
     handle_incoming_event(topic, payload, state)
   end
 
-  defp handle_incoming_event(topic, payload, state) do
-    # Normalize envelope into {topic, payload} so flush gets both pieces
-    state = add_event({topic, payload}, state)
-    {:noreply, state, {:continue, {:flush_buffer, :if_full}}}
-  end
-
   @impl true
   def handle_info({:flush_buffer, :scheduled}, state) do
     if state.size > 0 do
@@ -91,6 +85,18 @@ defmodule Gaia.FarmNode.HubConnection.EventDispatcher do
     handle_flush_if_full(state)
   end
 
+  @impl true
+  def handle_continue(:schedule_flush, state) do
+    schedule_flush()
+    {:noreply, state}
+  end
+
+  defp handle_incoming_event(topic, payload, state) do
+    # Normalize envelope into {topic, payload} so flush gets both pieces
+    state = add_event({topic, payload}, state)
+    {:noreply, state, {:continue, {:flush_buffer, :if_full}}}
+  end
+
   defp handle_flush_if_full(state) do
     if state.size >= max_buffer_size() do
       flush(state.buffer)
@@ -98,12 +104,6 @@ defmodule Gaia.FarmNode.HubConnection.EventDispatcher do
     else
       {:noreply, state}
     end
-  end
-
-  @impl true
-  def handle_continue(:schedule_flush, state) do
-    schedule_flush()
-    {:noreply, state}
   end
 
   defp schedule_flush do

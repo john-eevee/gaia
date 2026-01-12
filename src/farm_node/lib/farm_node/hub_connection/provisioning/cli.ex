@@ -14,9 +14,9 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.CLI do
 
       # Non-interactive mode
       bin/farm_node rpc "Gaia.FarmNode.HubConnection.Provisioning.CLI.run([
-        hub_address: \"https://hub.gaia.coop\",
-        provisioning_key: \"SECRET123\",
-        farm_identifier: \"green-acres\"
+        hub_address: "https://hub.gaia.coop",
+        provisioning_key: "SECRET123",
+        farm_identifier: "green-acres"
       ])"
   """
 
@@ -263,8 +263,6 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.CLI do
 
   defp valid_identifier?(identifier),
     do: Gaia.FarmNode.HubConnection.Provisioning.CLI.Helpers.valid_identifier?(identifier)
-
-  defp mask_key(key), do: Gaia.FarmNode.HubConnection.Provisioning.CLI.Helpers.mask_key(key)
 
   defp format_error(reason),
     do: Gaia.FarmNode.HubConnection.Provisioning.CLI.Helpers.format_error(reason)
