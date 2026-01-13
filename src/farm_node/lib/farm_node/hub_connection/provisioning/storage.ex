@@ -16,6 +16,11 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.Storage do
   @key_file "farm_node_key.pem"
   @state_file "provisioning_state.json"
 
+  @type extract_der_result :: [
+          cert: binary(),
+          keys: [key_der: binary(), type: atom()]
+        ]
+
   defp ssl_dir do
     Application.get_env(:farm_node, :ssl_dir, @default_ssl_dir)
   end
@@ -102,6 +107,30 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.Storage do
 
     Logger.warning("mTLS credentials have been revoked and removed")
     :ok
+  end
+
+  @doc """
+  Extract DERs from the provisioned certificate and keys.
+  """
+  @spec extract_ders() :: {:ok, extract_der_result()} | {:error, term()}
+  def extract_ders() do
+    with {:ok, creds} <- Provisioning.Storage.load_credentials(),
+         {:ok, cert} <- X509.Certificate.from_pem(creds.cert),
+         cert_der = X509.Certificate.to_der(cert),
+         {:ok, key} <- X509.PrivateKey.from_pem(creds.key),
+         key_der = X509.PrivateKey.to_der(key) do
+      result = [cert: cert_der, keys: [key_der: key_der, type: get_key_type(key)]]
+      {:ok, result}
+    end
+  end
+
+  defp get_key_type(key) do
+    case key do
+      {:RSAPrivateKey, _, _, _, _, _, _, _, _, _, _} -> :RSAPrivateKey
+      {:ECPrivateKey, _, _, _, _} -> :ECPrivateKey
+      {:PrivateKeyInfo, _} -> :PrivateKeyInfo
+      _ -> :RSAPrivateKey
+    end
   end
 
   # Private Functions

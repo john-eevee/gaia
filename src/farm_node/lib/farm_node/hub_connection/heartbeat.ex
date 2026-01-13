@@ -1,5 +1,9 @@
 defmodule Gaia.FarmNode.HubConnection.Heartbeat do
   use GenServer
+  require Logger
+
+  alias Gaia.FarmNode.HubConnection.Client
+  alias Gaia.FarmNode.HubConnection.Provisioning.Storage
 
   defmodule State do
     @moduledoc false
@@ -46,8 +50,20 @@ defmodule Gaia.FarmNode.HubConnection.Heartbeat do
 
   @impl GenServer
   def handle_info(:beat, %State{} = state) do
-    # call hub api
-    # if failts, send a message to the provision cleaning server
+    case Client.heartbeat() do
+      {:ok, %{status: 200}} ->
+        Logger.debug("Heartbeat successful")
+
+      {:ok, %{status: 403}} ->
+        Logger.error("Hub responded with 403 Forbidden. Revoking credentials as per Rule 2.")
+        Storage.revoke_credentials()
+
+      {:ok, %{status: status}} ->
+        Logger.warning("Heartbeat failed with status #{status}")
+
+      {:error, reason} ->
+        Logger.error("Heartbeat failed: #{inspect(reason)}")
+    end
 
     ref = schedule_heartbeat(state.interval)
     new_state = %State{state | timer_ref: ref}
