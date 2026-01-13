@@ -114,7 +114,7 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.Storage do
   """
   @spec extract_ders() :: {:ok, extract_der_result()} | {:error, term()}
   def extract_ders() do
-    with {:ok, creds} <- Provisioning.Storage.load_credentials(),
+    with {:ok, creds} <- load_credentials(),
          {:ok, cert} <- X509.Certificate.from_pem(creds.cert),
          cert_der = X509.Certificate.to_der(cert),
          {:ok, key} <- X509.PrivateKey.from_pem(creds.key),
@@ -127,9 +127,8 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.Storage do
   defp get_key_type(key) do
     case key do
       {:RSAPrivateKey, _, _, _, _, _, _, _, _, _, _} -> :RSAPrivateKey
-      {:ECPrivateKey, _, _, _, _} -> :ECPrivateKey
-      {:PrivateKeyInfo, _} -> :PrivateKeyInfo
-      _ -> :RSAPrivateKey
+      {:ECPrivateKey, _, _, _, _, _} -> :ECPrivateKey
+      {:PrivateKeyInfo, _, _, _, _, _} -> :PrivateKeyInfo
     end
   end
 
