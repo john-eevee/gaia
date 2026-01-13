@@ -1,6 +1,48 @@
 defmodule Gaia.FarmNode.HubConnection.HeartbeatTest do
   alias Gaia.FarmNode.HubConnection.Heartbeat
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
+
+  @test_ssl_dir "test/tmp/ssl_heartbeat"
+
+  defmodule MockHttpClient do
+    def request(_opts), do: {:ok, %{status: 200}}
+  end
+
+  setup do
+    # Preserve original configuration
+    original_client = Application.get_env(:farm_node, :http_client)
+    original_ssl_dir = Application.get_env(:farm_node, :ssl_dir)
+
+    # Prepare a dummy SSL directory with valid-ish credentials to satisfy
+    # Client.connection_opts/0 which is called during heartbeat.
+    File.mkdir_p!(@test_ssl_dir)
+    key = X509.PrivateKey.new_rsa(2048)
+    cert = X509.Certificate.self_signed(key, "/CN=test")
+    File.write!(Path.join(@test_ssl_dir, "cert.pem"), X509.Certificate.to_pem(cert))
+    File.write!(Path.join(@test_ssl_dir, "key.pem"), X509.PrivateKey.to_pem(key))
+
+    # Mock the HTTP client to avoid real network calls and ensure validation passes
+    Application.put_env(:farm_node, :http_client, MockHttpClient)
+    Application.put_env(:farm_node, :ssl_dir, @test_ssl_dir)
+
+    on_exit(fn ->
+      File.rm_rf!(@test_ssl_dir)
+
+      if original_client do
+        Application.put_env(:farm_node, :http_client, original_client)
+      else
+        Application.delete_env(:farm_node, :http_client)
+      end
+
+      if original_ssl_dir do
+        Application.put_env(:farm_node, :ssl_dir, original_ssl_dir)
+      else
+        Application.delete_env(:farm_node, :ssl_dir)
+      end
+    end)
+
+    :ok
+  end
 
   describe "Heartbeat Server" do
     test "should initialize without args" do
