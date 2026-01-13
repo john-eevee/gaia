@@ -2,8 +2,7 @@ defmodule Gaia.FarmNode.HubConnection.Heartbeat do
   use GenServer
   require Logger
 
-  alias Gaia.FarmNode.HubConnection.Client
-  alias Gaia.FarmNode.HubConnection.Provisioning.Storage
+  alias Gaia.FarmNode.HubConnection.Provisioning
 
   defmodule State do
     @moduledoc false
@@ -50,20 +49,7 @@ defmodule Gaia.FarmNode.HubConnection.Heartbeat do
 
   @impl GenServer
   def handle_info(:beat, %State{} = state) do
-    case Client.heartbeat() do
-      {:ok, %{status: 200}} ->
-        Logger.debug("Heartbeat successful")
-
-      {:ok, %{status: 403}} ->
-        Logger.error("Hub responded with 403 Forbidden. Revoking credentials as per Rule 2.")
-        Storage.revoke_credentials()
-
-      {:ok, %{status: status}} ->
-        Logger.warning("Heartbeat failed with status #{status}")
-
-      {:error, reason} ->
-        Logger.error("Heartbeat failed: #{inspect(reason)}")
-    end
+    do_heartbeat()
 
     ref = schedule_heartbeat(state.interval)
     new_state = %State{state | timer_ref: ref}
@@ -72,5 +58,30 @@ defmodule Gaia.FarmNode.HubConnection.Heartbeat do
 
   defp schedule_heartbeat(interval) do
     Process.send_after(self(), :beat, interval)
+  end
+
+  defp do_heartbeat do
+    case client().heartbeat() do
+      {:ok, %{status: 200}} ->
+        Logger.debug("Heartbeat successful")
+
+      {:ok, %{status: 403}} ->
+        Logger.error("Hub responded with 403 Forbidden. Revoking credentials as per Rule 2.")
+        Provisioning.revoke()
+
+      {:ok, %{status: status}} ->
+        Logger.warning("Heartbeat failed with status #{status}")
+
+      {:error, reason} ->
+        Logger.error("Heartbeat failed: #{inspect(reason)}")
+    end
+  end
+
+  defp client() do
+    Application.get_env(
+      :farm_node,
+      Gaia.FarmNode.HubConnection.Client,
+      Gaia.FarmNode.HubConnection.Client
+    )
   end
 end

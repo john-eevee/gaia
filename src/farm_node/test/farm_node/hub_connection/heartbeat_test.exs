@@ -1,58 +1,26 @@
 defmodule Gaia.FarmNode.HubConnection.HeartbeatTest do
   alias Gaia.FarmNode.HubConnection.Heartbeat
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
+  import Mox
 
-  @test_ssl_dir "test/tmp/ssl_heartbeat"
+  setup :verify_on_exit!
 
-  defmodule MockHttpClient do
-    def request(_opts), do: {:ok, %{status: 200}}
-  end
-
-  setup do
-    # Preserve original configuration
-    original_client = Application.get_env(:farm_node, :http_client)
-    original_ssl_dir = Application.get_env(:farm_node, :ssl_dir)
-
-    # Prepare a dummy SSL directory with valid-ish credentials to satisfy
-    # Client.connection_opts/0 which is called during heartbeat.
-    File.mkdir_p!(@test_ssl_dir)
-    key = X509.PrivateKey.new_rsa(2048)
-    cert = X509.Certificate.self_signed(key, "/CN=test")
-    File.write!(Path.join(@test_ssl_dir, "cert.pem"), X509.Certificate.to_pem(cert))
-    File.write!(Path.join(@test_ssl_dir, "key.pem"), X509.PrivateKey.to_pem(key))
-
-    # Mock the HTTP client to avoid real network calls and ensure validation passes
-    Application.put_env(:farm_node, :http_client, MockHttpClient)
-    Application.put_env(:farm_node, :ssl_dir, @test_ssl_dir)
-
-    on_exit(fn ->
-      File.rm_rf!(@test_ssl_dir)
-
-      if original_client do
-        Application.put_env(:farm_node, :http_client, original_client)
-      else
-        Application.delete_env(:farm_node, :http_client)
-      end
-
-      if original_ssl_dir do
-        Application.put_env(:farm_node, :ssl_dir, original_ssl_dir)
-      else
-        Application.delete_env(:farm_node, :ssl_dir)
-      end
-    end)
-
+  setup_all %{} do
+    Mox.defmock(MockHubConnectionClient, for: Gaia.FarmNode.HubConnection.Client)
+    Application.put_env(:farm_node, Gaia.FarmNode.HubConnection.Client, MockHubConnectionClient)
     :ok
   end
 
   describe "Heartbeat Server" do
     test "should initialize without args" do
-      {:ok, pid} = Heartbeat.start_link(name: :hbt_1)
+      {:ok, pid} = Heartbeat.start_link()
 
       assert Process.alive?(pid)
       Process.exit(pid, :normal)
     end
 
     test "defaults should match expected" do
+      # make sure this is the only one with default name
       {:ok, pid} = Heartbeat.start_link()
       state = :sys.get_state(pid)
 
@@ -62,19 +30,22 @@ defmodule Gaia.FarmNode.HubConnection.HeartbeatTest do
     end
 
     test "should schedule a timer" do
-      {:ok, pid} = Heartbeat.start_link(interval: 1_000, name: :hbt_3)
+      {:ok, pid} = Heartbeat.start_link(interval: 1_000)
       state = :sys.get_state(pid)
       assert is_reference(state.timer_ref)
       Process.exit(pid, :normal)
     end
 
     test "should update the reference when rescheduling" do
-      {:ok, pid} = Heartbeat.start_link(interval: 1_000, name: :hbt_4)
+      Mox.expect(MockHubConnectionClient, :heartbeat, fn -> {:ok, Req.Response.new()} end)
+      {:ok, pid} = Heartbeat.start_link(interval: 1_000)
+      # Allow the server to use the stub and mocks
+      allow(MockHubConnectionClient, self(), pid)
       state = :sys.get_state(pid)
       ref = state.timer_ref
 
       send(pid, :beat)
-      Process.sleep(10)
+      Process.sleep(100)
       new_state = :sys.get_state(pid)
       assert is_reference(new_state.timer_ref)
       refute new_state.timer_ref == ref

@@ -4,14 +4,21 @@ defmodule Gaia.FarmNode.HubConnection.Client do
   The module provides API calls as functions; each public function issues requests to the Hub
   and should be invoked only when strictly necessary to ensure data protection.
   """
+
+  @callback heartbeat() :: {:ok, Req.Response.t()} | {:error, Exception.t()}
+
   require Logger
   alias Gaia.FarmNode.Config
   alias Gaia.FarmNode.HubConnection.Provisioning
   alias Gaia.FarmNode.HubConnection.Client.NotProvisionedError
 
-  def heartbeat() do
+  @doc """
+  Sends a HEAD request to the heartbeat endpoint, to validate the mTLS certificate within the request.
+  """
+
+  def heartbeat do
     url = build_url("/api/v1/heartbeat")
-    request(url: url)
+    request(url: url, method: :head)
   end
 
   # see https://hexdocs.pm/req/Req.html#new/1

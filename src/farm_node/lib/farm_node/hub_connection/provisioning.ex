@@ -69,6 +69,14 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning do
     end
   end
 
+  @doc """
+  Revoke the certificates, effectivelly blocking all communication with the Hub, until a new certificate is provisioned.
+  """
+  @spec revoke :: :ok
+  def revoke do
+    Storage.revoke_credentials()
+  end
+
   # Private Functions
 
   defp execute_provisioning(hub_address, provisioning_key, farm_identifier) do
