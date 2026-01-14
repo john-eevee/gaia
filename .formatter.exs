@@ -1,12 +1,7 @@
-# Formatter configuration for all Gaia projects.
-# This file will be used by Mix tasks such as `mix format` when run from the root of the project.
-
-# Nonetheless, each application can have its `.formatter.exs` file, which will be
-# used when running `mix format` from inside that application, or from the root.
-
-# This file only specifies to format the relevant subdirectories inside `src/`,
-# and none outside of it.
-
+# Used by "mix format"
 [
-  subdirectories: ["{mix,.formatter}.exs", "src/**/{config,lib,test}/**/*.{ex,exs}"]
+  inputs: ["{mix,.formatter,.workspace}.exs", "config/*.exs"],
+  # by default packages are expected under a packages directory but you
+  # can add any other subdirectory
+  subdirectories: ["packages/*"]
 ]
