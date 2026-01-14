@@ -307,7 +307,7 @@ defmodule Gaia.FarmNode.Config do
 
     buffer_size = Keyword.get(config, :buffer_size, @default_buffer_size)
 
-    if not is_integer(buffer_size) and buffer_size > 0 do
+    if not (is_integer(buffer_size) and buffer_size > 0) do
       raise EventDispatcherError,
         key: [:event_dispatcher, :buffer_size],
         value: buffer_size,
@@ -316,7 +316,7 @@ defmodule Gaia.FarmNode.Config do
 
     flush_interval = Keyword.get(config, :flush_interval, @default_flush_interval)
 
-    if not is_integer(flush_interval) and flush_interval > 0 do
+    if not (is_integer(flush_interval) and flush_interval > 0) do
       raise EventDispatcherError,
         key: [:event_dispatcher, :flush_interval],
         value: flush_interval,
@@ -325,7 +325,7 @@ defmodule Gaia.FarmNode.Config do
 
     subscriptions = Keyword.get(config, :subscriptions, @default_subscriptions)
 
-    if not is_list(subscriptions) and Enum.all?(subscriptions, &is_binary/1) do
+    if not (is_list(subscriptions) and Enum.all?(subscriptions, &is_binary/1)) do
       raise EventDispatcherError,
         key: [:event_dispatcher, :subscriptions],
         value: subscriptions,
