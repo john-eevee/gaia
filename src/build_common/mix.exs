@@ -7,7 +7,7 @@ defmodule Gaia.Build.Mix do
 
   defmodule YourApp.MixProject do
     use Mix.Project
-    Code.require_file("../build/common.exs", __DIR__)
+    Code.require_file("../build_common/common.exs", __DIR__)
 
     def project do
       [
