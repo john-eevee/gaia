@@ -68,7 +68,7 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.Client do
 
     # Allow injection of a test HTTP client via application config for
     # deterministic testing. Defaults to Req in production.
-    http_client = Application.get_env(:farm_node, :http_client, Req)
+    http_client = Gaia.FarmNode.Config.http_client()
 
     case http_client.post(url,
            body: json_body,

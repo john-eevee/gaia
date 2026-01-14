@@ -11,7 +11,6 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.Storage do
 
   require Logger
 
-  @default_ssl_dir "priv/ssl"
   @cert_file "farm_node_cert.pem"
   @key_file "farm_node_key.pem"
   @state_file "provisioning_state.json"
@@ -22,7 +21,7 @@ defmodule Gaia.FarmNode.HubConnection.Provisioning.Storage do
         ]
 
   defp ssl_dir do
-    Application.get_env(:farm_node, :ssl_dir, @default_ssl_dir)
+    Gaia.FarmNode.Config.ssl_dir()
   end
 
   @spec store_credentials(any(), any()) ::

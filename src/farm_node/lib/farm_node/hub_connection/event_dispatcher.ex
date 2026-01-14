@@ -22,10 +22,8 @@ defmodule Gaia.FarmNode.HubConnection.EventDispatcher do
   use GenServer
   require Logger
 
+  alias Gaia.FarmNode.Config
   alias Gaia.FarmNode.EventStream
-
-  @default_buffer_size 10
-  @default_flush_interval 5_000
 
   ## Client API
 
@@ -130,23 +128,15 @@ defmodule Gaia.FarmNode.HubConnection.EventDispatcher do
   end
 
   defp max_buffer_size do
-    Keyword.get(config(), :buffer_size, @default_buffer_size)
+    Config.event_dispatcher()[:buffer_size]
   end
 
   defp buffer_flush_interval do
-    Keyword.get(config(), :flush_interval, @default_flush_interval)
+    Config.event_dispatcher()[:flush_interval]
   end
 
   defp subscribed_topics do
-    Keyword.get(config(), :subscriptions, ["telemetry:all", "event:all"])
-  end
-
-  defp config do
-    Application.get_env(:farm_node, :event_dispatcher,
-      buffer_size: @default_buffer_size,
-      flush_interval: @default_flush_interval,
-      subscriptions: ["telemetry:all", "event:all"]
-    )
+    Config.event_dispatcher()[:subscriptions]
   end
 
   # notes:

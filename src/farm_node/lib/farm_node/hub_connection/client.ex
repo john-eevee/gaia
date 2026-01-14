@@ -4,16 +4,21 @@ defmodule Gaia.FarmNode.HubConnection.Client do
   The module provides API calls as functions; each public function issues requests to the Hub
   and should be invoked only when strictly necessary to ensure data protection.
   """
-  require Logger
-  alias Gaia.FarmNode.HubConnection.Client.InvalidUrlError
-  alias Gaia.FarmNode.HubConnection.Client.NotProvisionedError
-  alias Gaia.FarmNode.HubConnection.Client.UrlMissingError
-  alias Gaia.FarmNode.HubConnection.Provisioning
 
-  def heartbeat() do
-    with {:ok, url} <- build_url("/api/v1/heartbeat") do
-      request(url: url)
-    end
+  @callback heartbeat() :: {:ok, Req.Response.t()} | {:error, Exception.t()}
+
+  require Logger
+  alias Gaia.FarmNode.Config
+  alias Gaia.FarmNode.HubConnection.Provisioning
+  alias Gaia.FarmNode.HubConnection.Client.NotProvisionedError
+
+  @doc """
+  Sends a HEAD request to the heartbeat endpoint, to validate the mTLS certificate within the request.
+  """
+
+  def heartbeat do
+    url = build_url("/api/v1/heartbeat")
+    request(url: url, method: :head)
   end
 
   # see https://hexdocs.pm/req/Req.html#new/1
@@ -36,53 +41,15 @@ defmodule Gaia.FarmNode.HubConnection.Client do
     http_client().request(new_options)
   end
 
-  # undocumented application configuration
-  # used only for testing purposes, we only support one http library, since
-  # we need to configure it's connection and each have their own way.
-  defp http_client() do
-    case Application.get_env(:farm_node, __MODULE__) do
-      [http_client: client] when is_atom(client) -> client
-      _ -> Req
-    end
+  defp http_client do
+    Config.http_client()
   end
 
   defp build_url(path) do
-    with {:ok, url} <- base_url() do
-      full_url =
-        url
-        |> URI.parse()
-        |> URI.append_path(path)
-        |> URI.to_string()
-
-      {:ok, full_url}
-    end
-  end
-
-  defp base_url() do
-    case Application.get_env(:farm_node, __MODULE__) do
-      [base_url: base_url] -> validate_url(base_url)
-      _ -> {:error, %UrlMissingError{}}
-    end
-  end
-
-  defp validate_url(base_url) do
-    valid_scheme = fn scheme ->
-      Enum.find([:https, :http], fn
-        ^scheme -> true
-        _ -> false
-      end)
-    end
-
-    is_uri = fn ->
-      uri = URI.parse(base_url)
-      is_binary(uri.host) && valid_scheme.(uri.scheme)
-    end
-
-    if is_uri.() do
-      {:ok, base_url}
-    else
-      {:error, InvalidUrlError.exception(base_url)}
-    end
+    Config.hub_base_url()
+    |> URI.parse()
+    |> URI.append_path(path)
+    |> URI.to_string()
   end
 
   defp user_agent() do

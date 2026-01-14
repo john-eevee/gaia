@@ -7,6 +7,8 @@ defmodule Gaia.FarmNode.Application do
 
   @impl true
   def start(_type, _args) do
+    Gaia.FarmNode.Config.validate!()
+
     children = [
       # Registry for devices
       {Registry, keys: :unique, name: Gaia.FarmNode.Device.Registry},
