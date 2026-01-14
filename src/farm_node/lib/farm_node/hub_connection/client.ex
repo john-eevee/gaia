@@ -10,7 +10,7 @@ defmodule Gaia.FarmNode.HubConnection.Client do
   require Logger
   alias Gaia.FarmNode.Config
   alias Gaia.FarmNode.HubConnection.Provisioning
-  alias Gaia.FarmNode.HubConnection.Client.NotProvisionedError
+  alias Gaia.FarmNode.HubConnection.Client.InvalidCertificateFormat
 
   @doc """
   Sends a HEAD request to the heartbeat endpoint, to validate the mTLS certificate within the request.
@@ -72,7 +72,7 @@ defmodule Gaia.FarmNode.HubConnection.Client do
         ]
 
       {:error, reason} ->
-        raise NotProvisionedError, "Could not extract mTLS credentials: #{inspect(reason)}"
+        raise InvalidCertificateFormat, "Could not extract mTLS credentials: #{inspect(reason)}"
     end
   end
 end
