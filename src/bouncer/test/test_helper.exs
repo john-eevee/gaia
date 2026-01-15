@@ -1,2 +1,2 @@
 ExUnit.configure(exclude: [:skip, :ci])
-ExUnit.start()
+ExUnit.start(capture_log: true)
