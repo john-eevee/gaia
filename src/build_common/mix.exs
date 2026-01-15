@@ -7,7 +7,7 @@ defmodule Gaia.Build.Mix do
 
   defmodule YourApp.MixProject do
     use Mix.Project
-    Code.require_file("../build/common.exs", __DIR__)
+    Code.require_file("../build_common/mix.exs", __DIR__)
 
     def project do
       [
@@ -51,7 +51,8 @@ defmodule Gaia.Build.Mix do
       dialyzer: [plt_add_apps: [:mix, :ex_unit, :eex]]
     ]
 
-    Keyword.merge(opts, combined) |> IO.inspect(label: "Mix Project Configuration")
+    combined
+
   end
 
   defp elixir_version, do: "~> 1.19"

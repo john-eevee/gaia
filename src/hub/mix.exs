@@ -1,6 +1,6 @@
 defmodule Gaia.Hub.MixProject do
   use Mix.Project
-  Code.require_file("../build/mix.exs", __DIR__)
+  Code.require_file("../build_common/mix.exs", __DIR__)
 
   def project do
     [
