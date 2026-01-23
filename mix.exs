@@ -26,7 +26,9 @@ defmodule Gaia.MixWorkspace do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:workspace, "~> 0.3.1"}
+      {:workspace, "~> 0.3.1"},
+      # only used to shutup lsp
+      {:ecto_sql, "~> 3.13", only: [:dev, :test]}
     ]
   end
 end
