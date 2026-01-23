@@ -127,9 +127,7 @@ defmodule Gaia.FarmNode.TelemetrySharing do
           last_shared: {:alert, alert}
       }
     else
-      Logger.debug(
-        "TelemetrySharing: Blocking alert type=#{alert[:type]} (policy denies)"
-      )
+      Logger.debug("TelemetrySharing: Blocking alert type=#{alert[:type]} (policy denies)")
 
       %{
         state
