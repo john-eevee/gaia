@@ -1,12 +1,8 @@
 # Gaia
 
-```
-                                                    | ----------------------------|
-                                                    |  ⚠ NOT PRODUCTION READY ⚠  |
-                                                    |                             |
-                                                    |  and probably will never be |
-                                                    | ----------------------------|
-```
+
+> [!CAUTION]
+> NOT Production ready. Probably will never be.
 
 **A Smart Agriculture Cooperative Platform**
 
