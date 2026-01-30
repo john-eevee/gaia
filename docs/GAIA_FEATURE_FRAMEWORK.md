@@ -150,6 +150,7 @@ end
 ```
 lib/<app>/<context>.ex                    # Facade (public API)
 lib/<app>/<context>/
+├── error.ex                              # Context error struct
 ├── <entity>.ex                           # Ecto Schema
 ├── <value_object>.ex                     # Non-persisted struct
 ├── <service>.ex                          # Complex operation
@@ -171,6 +172,7 @@ test/support/fixtures/<context>/
 |------|---------|---------|
 | Context module | `Gaia.<App>.<Context>` | `Gaia.Hub.CoopIdentity` |
 | Entity | `Gaia.<App>.<Context>.<Entity>` | `Gaia.Hub.CoopIdentity.Farm` |
+| Error | `Gaia.<App>.<Context>.Error` | `Gaia.Hub.CoopIdentity.Error` |
 | Service | `Gaia.<App>.<Context>.<Action>` | `Gaia.Hub.Provision.Signing` |
 | Event | `Gaia.<App>.<Context>.Events.<Event>` | `Gaia.Hub.CoopIdentity.Events.FarmCreated` |
 | Behaviour | `Gaia.<App>.<Context>.<Name>` | `Gaia.Bouncer.Database` |
@@ -250,6 +252,233 @@ Does it need to:
 
 ---
 
+## Error Handling
+
+### The Error Contract
+
+Every context defines its own error struct. Public functions return:
+
+```elixir
+{:ok, result} | {:error, Context.Error.t()} | {:error, Ecto.Changeset.t()}
+```
+
+**Two error types are valid**:
+1. **Domain errors** - Business logic failures, wrapped in context-specific error struct
+2. **Validation errors** - Ecto changesets (kept as-is for field-level detail)
+
+### Context Error Structure
+
+Each context has an `error.ex` module:
+
+```
+lib/<app>/<context>/
+├── error.ex                    # Context error definition
+├── <entity>.ex
+└── ...
+```
+
+### Error Definition Pattern
+
+```elixir
+# lib/hub/coop_identity/error.ex
+defmodule Gaia.Hub.CoopIdentity.Error do
+  @moduledoc """
+  Error type for the CoopIdentity context.
+  """
+
+  @type reason ::
+          :farm_not_found
+          | :farmer_not_found
+          | :key_expired
+          | :key_already_used
+          | :certificate_revoked
+          | :unauthorized
+
+  @type t :: %__MODULE__{
+          reason: reason(),
+          message: String.t(),
+          context: map(),
+          cause: Exception.t() | nil
+        }
+
+  defexception [:reason, :message, :context, :cause]
+
+  @impl true
+  def message(%__MODULE__{message: message}), do: message
+
+  # Constructor functions for each error reason
+  @spec farm_not_found(Ecto.UUID.t()) :: t()
+  def farm_not_found(farm_id) do
+    %__MODULE__{
+      reason: :farm_not_found,
+      message: "Farm not found: #{farm_id}",
+      context: %{farm_id: farm_id},
+      cause: nil
+    }
+  end
+
+  @spec key_expired(String.t()) :: t()
+  def key_expired(key_id) do
+    %__MODULE__{
+      reason: :key_expired,
+      message: "Provisioning key has expired",
+      context: %{key_id: key_id},
+      cause: nil
+    }
+  end
+
+  # Wrap external errors
+  @spec wrap(reason(), String.t(), Exception.t()) :: t()
+  def wrap(reason, message, cause) do
+    %__MODULE__{
+      reason: reason,
+      message: message,
+      context: %{},
+      cause: cause
+    }
+  end
+end
+```
+
+### Usage in Context Facade
+
+```elixir
+# lib/hub/coop_identity.ex
+defmodule Gaia.Hub.CoopIdentity do
+  alias __MODULE__.Error
+
+  @spec get_farm(Ecto.UUID.t()) :: 
+    {:ok, Farm.t()} | {:error, Error.t()}
+  def get_farm(farm_id) do
+    case Repo.get(Farm, farm_id) do
+      nil -> {:error, Error.farm_not_found(farm_id)}
+      farm -> {:ok, farm}
+    end
+  end
+
+  @spec register_farm(map()) :: 
+    {:ok, Farm.t()} | {:error, Ecto.Changeset.t()}
+  def register_farm(attrs) do
+    %Farm{}
+    |> Farm.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @spec provision_node(String.t(), String.t()) ::
+    {:ok, Certificate.t()} | {:error, Error.t()}
+  def provision_node(key, csr) do
+    with {:ok, key_record} <- validate_key(key),
+         {:ok, cert} <- sign_csr(csr, key_record) do
+      {:ok, cert}
+    end
+  end
+
+  defp validate_key(key) do
+    case Repo.get_by(ProvisioningKey, key_hash: hash(key)) do
+      nil -> {:error, Error.key_not_found(key)}
+      %{expires_at: exp} when exp < now -> {:error, Error.key_expired(key)}
+      %{used_at: used} when not is_nil(used) -> {:error, Error.key_already_used(key)}
+      key_record -> {:ok, key_record}
+    end
+  end
+end
+```
+
+### Pattern Matching on Errors
+
+```elixir
+# Caller can pattern match on reason
+case CoopIdentity.provision_node(key, csr) do
+  {:ok, cert} -> 
+    send_certificate(cert)
+  
+  {:error, %Error{reason: :key_expired}} -> 
+    {:error, :forbidden, "Provisioning key has expired"}
+  
+  {:error, %Error{reason: :key_already_used}} -> 
+    {:error, :conflict, "Key has already been used"}
+  
+  {:error, %Error{} = err} -> 
+    Logger.error("Provisioning failed", error: err)
+    {:error, :internal_server_error, "Provisioning failed"}
+end
+
+# Or match on the struct directly for catch-all
+case CoopIdentity.get_farm(id) do
+  {:ok, farm} -> farm
+  {:error, %Error{}} -> nil
+end
+```
+
+### Changeset vs Domain Error Decision
+
+```
+Is this a validation failure on user input?
+├── Yes → Return {:error, Ecto.Changeset.t()}
+│         (preserves field-level errors for forms/API)
+└── No
+    ├── Is it a business rule violation? → {:error, Context.Error.t()}
+    ├── Is it a "not found" case? → {:error, Context.Error.t()}
+    ├── Is it an external service failure? → {:error, Context.Error.t()} with cause
+    └── Is it an authorization failure? → {:error, Context.Error.t()}
+```
+
+### API Layer Translation
+
+```elixir
+# In Phoenix controller or Plug
+defp translate_error(%CoopIdentity.Error{reason: reason}) do
+  case reason do
+    :farm_not_found -> {404, "Farm not found"}
+    :farmer_not_found -> {404, "Farmer not found"}
+    :key_expired -> {410, "Provisioning key has expired"}
+    :key_already_used -> {409, "Provisioning key already used"}
+    :certificate_revoked -> {403, "Certificate has been revoked"}
+    :unauthorized -> {401, "Unauthorized"}
+    _ -> {500, "Internal error"}
+  end
+end
+
+defp translate_error(%Ecto.Changeset{} = changeset) do
+  errors = Ecto.Changeset.traverse_errors(changeset, &translate_field_error/1)
+  {422, %{errors: errors}}
+end
+```
+
+### Logging Errors
+
+```elixir
+# Errors carry enough context for structured logging
+Logger.error("Operation failed",
+  reason: err.reason,
+  message: err.message,
+  context: err.context,
+  cause: Exception.format(:error, err.cause)
+)
+```
+
+### Error Naming Convention
+
+| Type | Pattern | Example |
+|------|---------|---------|
+| Error module | `Gaia.<App>.<Context>.Error` | `Gaia.Hub.CoopIdentity.Error` |
+| Reason atoms | `:<entity>_<state>` | `:farm_not_found`, `:key_expired` |
+| Constructor | `<reason>(args)` | `Error.farm_not_found(id)` |
+
+### Adding to File Structure
+
+```
+lib/<app>/<context>/
+├── error.ex                    # Context error struct  ← NEW
+├── <entity>.ex
+├── <value_object>.ex
+├── <service>.ex
+└── events/
+    └── <entity>_<action>.ex
+```
+
+---
+
 ## The Seven Laws of Gaia
 
 ### 1. Law of Autonomy
@@ -308,19 +537,24 @@ end
 ```
 
 ### 5. Law of Result
-> All fallible operations return `{:ok, _} | {:error, _}`.
+> All fallible operations return `{:ok, _} | {:error, Context.Error.t() | Changeset.t()}`.
 
 ```elixir
-# Public API always returns tagged tuples
+# Public API returns tagged tuples with typed errors
 @spec register_farm(map()) :: {:ok, Farm.t()} | {:error, Changeset.t()}
+@spec get_farm(Ecto.UUID.t()) :: {:ok, Farm.t()} | {:error, Error.t()}
 
 # Use `with` for chaining
-with {:ok, farm} <- create_farm(attrs),
-     {:ok, policy} <- create_policy(farm),
-     {:ok, key} <- generate_key(farm) do
+with {:ok, farm} <- get_farm(farm_id),
+     {:ok, policy} <- get_policy(farm),
+     {:ok, _} <- authorize(farmer, farm) do
   {:ok, farm}
 end
 ```
+
+**Error types**:
+- `Ecto.Changeset.t()` for validation failures (field-level detail)
+- `Context.Error.t()` for domain errors (business logic, not found, auth)
 
 ### 6. Law of Specification
 > Every public function has `@doc` and `@spec`.
@@ -391,14 +625,15 @@ Before marking a feature complete:
 ```
 □ CIDER cycle complete (Context, Interface, Domain, Effect, React)
 □ Placed in correct bounded context
+□ Context has error.ex with typed reasons
 □ Public API in context facade with @doc/@spec
+□ Errors use Context.Error.t() or Ecto.Changeset.t()
 □ No cross-context function calls (events only)
 □ DataSharingPolicy checked if aggregating farm data
 □ External dependencies behind behaviours
 □ Tests written and passing
 □ mix ci passes (tests, credo, format)
 □ No defensive nil checks (pattern match instead)
-□ Errors are tagged tuples, not exceptions
 ```
 
 ---
@@ -413,11 +648,16 @@ Before marking a feature complete:
 ├─────────────────────────────────────────────────────────────────┤
 │ STRUCTURE:                                                      │
 │   lib/<app>/<context>.ex           ← Facade (public API)        │
+│   lib/<app>/<context>/error.ex     ← Context error struct       │
 │   lib/<app>/<context>/<entity>.ex  ← Schema (data + validation) │
 │   lib/<app>/<context>/<service>.ex ← Complex operations         │
 │   lib/<app>/<context>/events/*.ex  ← Cross-context events       │
 ├─────────────────────────────────────────────────────────────────┤
-│ RETURNS:     {:ok, result} | {:error, reason}                   │
+│ ERRORS:                                                         │
+│   {:error, Context.Error.t()}      ← Domain errors (not found,  │
+│                                       auth, business rules)     │
+│   {:error, Ecto.Changeset.t()}     ← Validation errors (fields) │
+├─────────────────────────────────────────────────────────────────┤
 │ CHAINING:    with {:ok, x} <- step1(), {:ok, y} <- step2()      │
 │ MULTI-STEP:  Ecto.Multi for transactional DB operations         │
 │ INJECTION:   Behaviour + Application.get_env + Mox              │
@@ -427,7 +667,7 @@ Before marking a feature complete:
 │   2. Trust        - Data sharing is opt-in                      │
 │   3. Boundaries   - Events, never direct calls                  │
 │   4. Crash        - Pattern match, let supervisors handle       │
-│   5. Result       - Tagged tuples for fallible ops              │
+│   5. Result       - Typed errors per context                    │
 │   6. Specification- @doc and @spec on public functions          │
 │   7. Simplicity   - Boring is good                              │
 ├─────────────────────────────────────────────────────────────────┤
@@ -441,5 +681,6 @@ Before marking a feature complete:
 
 ---
 
-**Version**: 1.0  
-**Created**: January 30, 2026
+**Version**: 1.1  
+**Created**: January 30, 2026  
+**Updated**: January 30, 2026 - Added typed error handling pattern
