@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "8443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./certs:/etc/caddy/certs
+    depends_on:
+      - bouncer
+      - hub
+    networks:
+      - gaia-network
+
+  bouncer:
+    build: 
+      context: ../../bouncer
+      dockerfile: deployment/docker/Dockerfile
+    environment:
+      BOUNCER_PORT: 4444
+      DB_HOST: postgres
+      DB_NAME: gaia
+      DB_USER: bouncer_ro
+      DB_PASSWORD: bouncer_password
+    depends_on:
+      - postgres
+    networks:
+      - gaia-network
+
+  hub:
+    build:
+      context: ../../hub
+      # Assuming a Dockerfile exists or will be created
+    environment:
+      PORT: 4000
+    networks:
+      - gaia-network
+
+  postgres:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_DB: gaia
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    networks:
+      - gaia-network
+
+networks:
+  gaia-network:
+    driver: bridge
