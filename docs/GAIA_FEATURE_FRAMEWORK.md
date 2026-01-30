@@ -121,18 +121,140 @@ end
 
 ### 5. React (What events propagate?)
 
-Cross-context communication via events.
+Cross-context communication via events over the **event bus**.
+
+#### The Event Bus
+
+Phoenix.PubSub is the event bus. Each application starts it in its supervision tree:
+
+```elixir
+# lib/hub/application.ex
+children = [
+  {Phoenix.PubSub, name: Gaia.Hub.PubSub},
+  # ...
+]
+```
+
+#### Publishing Events
 
 ```elixir
 # After successful registration
 defp broadcast_farm_created(farm) do
   event = %FarmCreated{id: farm.id, name: farm.name}
   Phoenix.PubSub.broadcast(
-    Gaia.PubSub,
+    Gaia.Hub.PubSub,
     Gaia.Event.topic(event),
     Gaia.Event.payload(event)
   )
 end
+```
+
+#### Subscribing to Events
+
+Subscribers are GenServers (or any process) that subscribe on init:
+
+```elixir
+# lib/hub/regional_analytics/farm_listener.ex
+defmodule Gaia.Hub.RegionalAnalytics.FarmListener do
+  use GenServer
+
+  def start_link(_opts) do
+    GenServer.start_link(__MODULE__, [], name: __MODULE__)
+  end
+
+  @impl true
+  def init(_) do
+    Phoenix.PubSub.subscribe(Gaia.Hub.PubSub, "coop_identity:farms")
+    {:ok, %{}}
+  end
+
+  @impl true
+  def handle_info({:farm_created, %{id: id, name: name}}, state) do
+    # React to event - initialize analytics for new farm
+    {:noreply, state}
+  end
+end
+```
+
+#### Event Struct Pattern
+
+```elixir
+# lib/hub/coop_identity/events/farm_created.ex
+defmodule Gaia.Hub.CoopIdentity.Events.FarmCreated do
+  @moduledoc "Emitted when a new farm joins the cooperative."
+  
+  use Gaia.Event
+  
+  defstruct [:id, :name, :created_at]
+  
+  @type t :: %__MODULE__{
+    id: Ecto.UUID.t(),
+    name: String.t(),
+    created_at: DateTime.t()
+  }
+end
+```
+
+#### The Gaia.Event Protocol
+
+```elixir
+# lib/shared/event.ex (in a shared library or each app)
+defprotocol Gaia.Event do
+  @doc "Returns the topic string for this event"
+  @spec topic(t) :: String.t()
+  def topic(event)
+  
+  @doc "Returns the payload tuple for this event"
+  @spec payload(t) :: {atom(), map()}
+  def payload(event)
+end
+
+# Usage macro for event structs
+defmodule Gaia.Event.Macros do
+  defmacro __using__(_opts) do
+    quote do
+      defimpl Gaia.Event do
+        def topic(%{__struct__: module}) do
+          module
+          |> Module.split()
+          |> Enum.take(3)  # e.g., ["Gaia", "Hub", "CoopIdentity"]
+          |> Enum.drop(1)  # ["Hub", "CoopIdentity"]
+          |> Enum.map(&Macro.underscore/1)
+          |> Enum.join(":")  # "hub:coop_identity"
+        end
+        
+        def payload(%{__struct__: module} = event) do
+          event_name = 
+            module
+            |> Module.split()
+            |> List.last()
+            |> Macro.underscore()
+            |> String.to_atom()
+          
+          {event_name, Map.from_struct(event)}
+        end
+      end
+    end
+  end
+end
+```
+
+#### Event Flow
+
+```
+┌─────────────────┐     broadcast      ┌─────────────────┐
+│  CoopIdentity   │ ─────────────────▶ │  Phoenix.PubSub │
+│  (publisher)    │   topic: "hub:     │     (bus)       │
+└─────────────────┘   coop_identity"   └────────┬────────┘
+                                                │
+                      subscribe                 │
+              ┌─────────────────────────────────┼─────────────────┐
+              │                                 │                 │
+              ▼                                 ▼                 ▼
+┌─────────────────┐               ┌─────────────────┐   ┌─────────────────┐
+│RegionalAnalytics│               │ SharedResources │   │   Marketplace   │
+│  FarmListener   │               │   FarmListener  │   │  FarmListener   │
+└─────────────────┘               └─────────────────┘   └─────────────────┘
 ```
 
 **Rules**:
@@ -140,6 +262,8 @@ end
 - Events are facts (past tense: `FarmCreated`, not `CreateFarm`)
 - Never call another context directly—emit an event
 - Subscribers handle events idempotently
+- Each subscriber is a supervised GenServer
+- Failed handlers crash and restart (don't break the publisher)
 
 ---
 
@@ -154,6 +278,7 @@ lib/<app>/<context>/
 ├── <entity>.ex                           # Ecto Schema
 ├── <value_object>.ex                     # Non-persisted struct
 ├── <service>.ex                          # Complex operation
+├── <name>_listener.ex                    # Event subscriber (GenServer)
 └── events/
     └── <entity>_<action>.ex              # Event struct
 
@@ -173,8 +298,9 @@ test/support/fixtures/<context>/
 | Context module | `Gaia.<App>.<Context>` | `Gaia.Hub.CoopIdentity` |
 | Entity | `Gaia.<App>.<Context>.<Entity>` | `Gaia.Hub.CoopIdentity.Farm` |
 | Error | `Gaia.<App>.<Context>.Error` | `Gaia.Hub.CoopIdentity.Error` |
-| Service | `Gaia.<App>.<Context>.<Action>` | `Gaia.Hub.Provision.Signing` |
 | Event | `Gaia.<App>.<Context>.Events.<Event>` | `Gaia.Hub.CoopIdentity.Events.FarmCreated` |
+| Listener | `Gaia.<App>.<Context>.<Name>Listener` | `Gaia.Hub.RegionalAnalytics.FarmListener` |
+| Service | `Gaia.<App>.<Context>.<Action>` | `Gaia.Hub.Provision.Signing` |
 | Behaviour | `Gaia.<App>.<Context>.<Name>` | `Gaia.Bouncer.Database` |
 | Implementation | `Gaia.<App>.<Context>.<Tech><Name>` | `Gaia.Bouncer.PostgrexDatabase` |
 
@@ -681,6 +807,6 @@ Before marking a feature complete:
 
 ---
 
-**Version**: 1.1  
+**Version**: 1.2  
 **Created**: January 30, 2026  
-**Updated**: January 30, 2026 - Added typed error handling pattern
+**Updated**: January 30, 2026 - Added typed errors, event bus documentation
