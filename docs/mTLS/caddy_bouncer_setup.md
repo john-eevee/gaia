@@ -51,9 +51,46 @@ Bouncer expects the PEM-encoded certificate in the `X-Client-Cert` header. It pa
 
 ## Phoenix (Hub) Configuration
 
-The Hub sits behind Caddy. It can trust that any request reaching it has already passed:
-1. Standard TLS handshake (Valid signature, not expired).
-2. mTLS verification (Signed by trusted CA).
-3. Bouncer check (Not revoked in the database).
+The Hub sits behind Caddy. Since Caddy handles the mTLS and Bouncer check, the Hub can trust the requests. However, it often needs to know *who* the client is.
 
-To identify the user/farmer, the Hub can look at the forwarded headers if Caddy is configured to pass them (e.g., `X-Client-Subject`).
+### 1. Extracting Client Information in Phoenix
+
+You can create a custom Plug to extract the client certificate or subject forwarded by Caddy.
+
+```elixir
+defmodule Gaia.HubWeb.Plugs.MTLSAuth do
+  import Plug.Conn
+
+  def init(opts), do: opts
+
+  def call(conn, _opts) do
+    # Caddy can be configured to pass the certificate subject or other details
+    case get_req_header(conn, "x-client-subject") do
+      [subject | _] ->
+        assign(conn, :current_client_subject, subject)
+      [] ->
+        # Optional: Handle missing auth if Caddy didn't reject it
+        conn
+    end
+  end
+end
+```
+
+### 2. Caddyfile Update to Pass Subject
+
+Update your `Caddyfile` to pass the subject to the Hub:
+
+```caddy
+    reverse_proxy hub:4000 {
+        header_up X-Client-Subject {http.request.tls.client.subject}
+    }
+```
+
+## Integration Testing
+
+To test the full flow:
+1. Start the services using the provided `docker-compose.yml` in `src/testing_facility/caddy/`.
+2. Generate a client certificate signed by the same CA.
+3. Attempt to connect to Caddy using the client certificate:
+   `curl -v --cert client.pem --key client.key https://localhost:8443/`
+4. Verify that Bouncer receives the validation request and the Hub receives the proxied request.
