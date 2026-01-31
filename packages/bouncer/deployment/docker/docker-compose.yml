@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   bouncer:
@@ -20,7 +20,7 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: postgres:14-alpine
+    image: postgis/postgis:18-3.6-alpine
     environment:
       POSTGRES_DB: gaia
       POSTGRES_USER: postgres
@@ -28,7 +28,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql
       - ./priv/migrations:/docker-entrypoint-initdb.d
     networks:
       - bouncer-network

@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   caddy:
@@ -15,7 +15,7 @@ services:
       - gaia-network
 
   bouncer:
-    build: 
+    build:
       context: ../../bouncer
       dockerfile: deployment/docker/Dockerfile
     environment:
@@ -39,7 +39,7 @@ services:
       - gaia-network
 
   postgres:
-    image: postgres:14-alpine
+    image: postgis/postgis:18-3.6-alpine
     environment:
       POSTGRES_DB: gaia
       POSTGRES_USER: postgres
