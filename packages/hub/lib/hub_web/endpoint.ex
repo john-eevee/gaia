@@ -25,7 +25,7 @@ defmodule Gaia.HubWeb.Endpoint do
     at: "/",
     from: :hub,
     gzip: not code_reloading?,
-    only: HubWeb.static_paths(),
+    only: Gaia.HubWeb.static_paths(),
     raise_on_missing_only: code_reloading?
   )
 

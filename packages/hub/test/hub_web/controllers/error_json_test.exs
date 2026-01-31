@@ -1,5 +1,5 @@
 defmodule Gaia.HubWeb.ErrorJSONTest do
-  use HubWeb.ConnCase, async: true
+  use Gaia.HubWeb.ConnCase, async: true
 
   test "renders 404" do
     assert HubWeb.ErrorJSON.render("404.json", %{}) == %{errors: %{detail: "Not Found"}}

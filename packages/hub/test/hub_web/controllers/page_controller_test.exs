@@ -1,5 +1,5 @@
 defmodule Gaia.HubWeb.PageControllerTest do
-  use HubWeb.ConnCase
+  use Gaia.HubWeb.ConnCase
 
   test "GET /", %{conn: conn} do
     conn = get(conn, ~p"/")

@@ -4,7 +4,7 @@ defmodule Gaia.HubWeb.ErrorHTML do
 
   See config/config.exs.
   """
-  use HubWeb, :html
+  use Gaia.HubWeb, :html
 
   # If you want to customize your error pages,
   # uncomment the embed_templates/1 call below
