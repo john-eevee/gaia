@@ -18,6 +18,10 @@ defmodule Gaia.FarmNode.MixProject do
     |> Gaia.Build.Mix.apply()
   end
 
+  def cli do
+    [preferred_envs: [ci: :test, precommit: :test, test: :test]]
+  end
+
   # Run "mix help compile.app" to learn about applications.
   def application do
     [

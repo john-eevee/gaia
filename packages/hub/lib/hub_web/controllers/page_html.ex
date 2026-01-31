@@ -4,7 +4,7 @@ defmodule Gaia.HubWeb.PageHTML do
 
   See the `page_html` directory for all templates available.
   """
-  use HubWeb, :html
+  use Gaia.HubWeb, :html
 
   embed_templates("page_html/*")
 end

@@ -27,7 +27,7 @@ defmodule Gaia.HubWeb.CoreComponents do
 
   """
   use Phoenix.Component
-  use Gettext, backend: HubWeb.Gettext
+  use Gettext, backend: Gaia.HubWeb.Gettext
 
   alias Phoenix.LiveView.JS
 

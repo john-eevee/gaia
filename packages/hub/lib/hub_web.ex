@@ -5,8 +5,8 @@ defmodule Gaia.HubWeb do
 
   This can be used in your application as:
 
-      use HubWeb, :controller
-      use HubWeb, :html
+      use Gaia.HubWeb, :controller
+      use Gaia.HubWeb, :html
 
   The definitions below will be executed for every controller,
   component, etc, so keep them short and clean, focused
@@ -40,7 +40,7 @@ defmodule Gaia.HubWeb do
     quote do
       use Phoenix.Controller, formats: [:html, :json]
 
-      use Gettext, backend: HubWeb.Gettext
+      use Gettext, backend: Gaia.HubWeb.Gettext
 
       import Plug.Conn
 
@@ -80,17 +80,16 @@ defmodule Gaia.HubWeb do
   defp html_helpers do
     quote do
       # Translation
-      use Gettext, backend: HubWeb.Gettext
+      use Gettext, backend: Gaia.HubWeb.Gettext
 
       # HTML escaping functionality
       import Phoenix.HTML
       # Core UI components
-      import HubWeb.CoreComponents
+      import Gaia.HubWeb.CoreComponents
 
       # Common modules used in templates
       alias Phoenix.LiveView.JS
-      alias HubWeb.Layouts
-
+      alias Gaia.HubWeb.Layouts
       # Routes generation with the ~p sigil
       unquote(verified_routes())
     end
@@ -99,9 +98,9 @@ defmodule Gaia.HubWeb do
   def verified_routes do
     quote do
       use Phoenix.VerifiedRoutes,
-        endpoint: HubWeb.Endpoint,
-        router: HubWeb.Router,
-        statics: HubWeb.static_paths()
+        endpoint: Gaia.HubWeb.Endpoint,
+        router: Gaia.HubWeb.Router,
+        statics: Gaia.HubWeb.static_paths()
     end
   end
 
