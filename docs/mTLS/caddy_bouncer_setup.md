@@ -86,10 +86,12 @@ Update your `Caddyfile` to pass the subject to the Hub:
     }
 ```
 
-## Integration Testing
+## Integration Testing (E2E)
+
+A complete end-to-end testing environment is provided in the `e2e/` directory.
 
 To test the full flow:
-1. Start the services using the provided `docker-compose.yml` in `src/testing_facility/caddy/`.
+1. Start the services using the provided `docker-compose.yml` in `e2e/`.
 2. Generate a client certificate signed by the same CA.
 3. Attempt to connect to Caddy using the client certificate:
    `curl -v --cert client.pem --key client.key https://localhost:8443/`
