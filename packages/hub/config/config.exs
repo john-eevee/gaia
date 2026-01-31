@@ -18,7 +18,6 @@ config :hub,
     cert: "priv/cert/selfsigned.pem",
     key: "priv/cert/selfsigned_key.pem"
   ],
-  ecto_repos: [Hub.Repo],
   generators: [timestamp_type: :utc_datetime],
   ecto_repos: [Gaia.Hub.Repo]
 
