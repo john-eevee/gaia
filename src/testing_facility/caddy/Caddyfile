@@ -2,41 +2,23 @@
 	debug
 }
 
+# Integration testing endpoint
 :8080 {
-	# Mutual TLS authentication
 	tls {
-		ca_root /etc/caddy/certs/ca.pem
 		client_auth {
 			mode require_and_verify
 			trusted_ca_cert_file /etc/caddy/certs/ca.pem
 		}
 	}
 
-	# Forward the client certificate to Bouncer for OCSP-like check
-	reverse_proxy {
-		# The Phoenix Hub server
-		to hub:4000
+	# Validate client certificate with Bouncer before reaching the Hub
+	forward_auth bouncer:4444 {
+		uri /validate
+		header_up X-Client-Cert {http.request.tls.client.certificate_pem}
+	}
 
-		header_up X-Client-Cert {http.reverse_proxy.header.X-Forwarded-Tls-Client-Cert}
-
-		# Perform the validation via Bouncer before forwarding to Hub
-		@bouncer_check {
-			method POST
-			path /validate
-		}
-
-		handle @bouncer_check {
-			reverse_proxy bouncer:4444
-		}
-
-		# Default behavior: Verify certificate via Bouncer sub-request
-		# Caddy doesn't have a built-in "auth_request" like Nginx out of the box without modules,
-		# but we can use the `forward_auth` directive or a similar pattern.
-		
-		forward_auth bouncer:4444 {
-			uri /validate
-			header_up X-Client-Cert {http.reverse_proxy.header.X-Forwarded-Tls-Client-Cert}
-			copy_headers X-Certificate-Status
-		}
+	# Proxy to the Phoenix Hub
+	reverse_proxy hub:4000 {
+		header_up X-Client-Subject {http.request.tls.client.subject}
 	}
 }
