@@ -74,7 +74,7 @@ defmodule Gaia.FarmNode.Config do
       # %{hub_base_url: "...", ssl_dir: "...", ...}
   """
 
-  defmodule HubBaseUrlError do
+  defmodule Gaia.HubBaseUrlError do
     @moduledoc "Exception raised when :hub_base_url is missing or invalid."
     defexception [:message, :value, :instruction]
 
