@@ -289,7 +289,8 @@ func TestCreateRootCACertificateSubject(t *testing.T) {
 			config.Locality, cert.Subject.Locality)
 	}
 
-	if len(cert.Subject.StreetAddress) == 0 || cert.Subject.StreetAddress[0] != config.StreetAddress {
+	if len(cert.Subject.StreetAddress) == 0 ||
+		cert.Subject.StreetAddress[0] != config.StreetAddress {
 		t.Errorf("StreetAddress mismatch. Expected %s, got %v",
 			config.StreetAddress, cert.Subject.StreetAddress)
 	}
@@ -480,15 +481,21 @@ func TestBuildCertificateInfoValidity(t *testing.T) {
 	afterCall := time.Now().UTC()
 
 	// NotBefore should be approximately now (within 1 minute)
-	if cert.NotBefore.Before(beforeCall.Add(-time.Minute)) || cert.NotBefore.After(afterCall.Add(time.Minute)) {
+	if cert.NotBefore.Before(beforeCall.Add(-time.Minute)) ||
+		cert.NotBefore.After(afterCall.Add(time.Minute)) {
 		t.Errorf("NotBefore not set correctly: %v", cert.NotBefore)
 	}
 
 	// NotAfter should be approximately 10 years from now (within 1 minute)
 	expectedNotAfter := afterCall.AddDate(RootCAValidityYears, 0, 0)
 	expectedNotAfterMin := beforeCall.AddDate(RootCAValidityYears, 0, 0)
-	if cert.NotAfter.Before(expectedNotAfterMin.Add(-time.Minute)) || cert.NotAfter.After(expectedNotAfter.Add(time.Minute)) {
-		t.Errorf("NotAfter not set correctly: %v (expected around %v)", cert.NotAfter, expectedNotAfter)
+	if cert.NotAfter.Before(expectedNotAfterMin.Add(-time.Minute)) ||
+		cert.NotAfter.After(expectedNotAfter.Add(time.Minute)) {
+		t.Errorf(
+			"NotAfter not set correctly: %v (expected around %v)",
+			cert.NotAfter,
+			expectedNotAfter,
+		)
 	}
 }
 
@@ -499,8 +506,7 @@ func BenchmarkCreateRootCA(b *testing.B) {
 		Country:      "US",
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = CreateRootCA(config)
 	}
 }

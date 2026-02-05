@@ -22,7 +22,6 @@ type CertificateAuthority struct {
 }
 
 type Config struct {
-	StoragePath   string
 	Organization  string
 	Country       string
 	Province      string
