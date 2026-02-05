@@ -1,0 +1,47 @@
+# --- Global Build Outputs ---
+# Ignore the central bin folder if you build binaries there
+/bin/
+/dist/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# --- Go Test & Coverage ---
+*.out
+*.test
+coverage.txt
+vendor/
+
+# --- Editors & IDEs ---
+# Neovim / Vim
+[._]*.s[a-v][a-z]
+!*.svg  # Don't ignore SVG images
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+Session.vim
+.netrwhist
+
+# VSCode
+.vscode/
+
+# Zed
+.zed
+
+# JetBrains / GoLand
+.idea/
+
+# --- OS System Files ---
+.DS_Store
+Thumbs.db
+.directory
+
+# --- Local Tooling ---
+# Ignore mise internal files if they ever appear (unlikely in repo root)
+.mise/
+# Ignore local environment variables
+.env
+.env.*
+!.env.example
