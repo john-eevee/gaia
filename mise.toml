@@ -1,6 +1,6 @@
 [tools]
 go = "1.25"
-"go:github.com/golangci/golangci-lint/cmd/golangci-lint" = "v2.8.0"
+golangci-lint = "v2.8.0"
 "go:mvdan.cc/gofumpt" = "v0.9.2"
 "go:golang.org/x/vuln/cmd/govulncheck" = "v1.1.4"
 "go:github.com/air-verse/air" = "v1.64.5"
