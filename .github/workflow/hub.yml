@@ -15,6 +15,6 @@ on:
 
 jobs:
   ci-pipeline:
-    uses: ./.github/workflows/reusable-go-ci.yml
+    uses: ./.github/workflows/go.jobs.yml
     with:
       app_dir: "apps/coop-hub"

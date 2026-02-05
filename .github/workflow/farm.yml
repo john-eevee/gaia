@@ -16,6 +16,6 @@ on:
 jobs:
   # Call the reusable workflow
   ci-pipeline:
-    uses: ./.github/workflows/reusable-go-ci.yml
+    uses: ./.github/workflows/go.jobs.yml
     with:
       app_dir: "apps/farm-node"
