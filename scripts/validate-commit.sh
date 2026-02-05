@@ -4,9 +4,9 @@ COMMIT_MSG_FILE=$1
 COMMIT_MSG=$(head -n1 "$COMMIT_MSG_FILE")
 
 TYPES="feat fix docs style refactor perf test build ci chore revert"
-SCOPES="farm hub pkg infra deps tests"
-TYPES_REGEX="${ALLOWED_TYPES// /|}"
-SCOPES_REGEX="${ALLOWED_SCOPES// /|}"
+SCOPES="farm hub pkg infra deps tests dev"
+TYPES_REGEX="${TYPES// /|}"
+SCOPES_REGEX="${SCOPES// /|}"
 REGEX="^($TYPES_REGEX)(\(($SCOPES_REGEX)\))?: .+$"
 
 if [[ ! $COMMIT_MSG =~ $REGEX ]]; then
@@ -18,10 +18,10 @@ if [[ ! $COMMIT_MSG =~ $REGEX ]]; then
   echo "   Example:     feat(farm): add moisture sensor driver"
   echo ""
   echo "   [Allowed Types]"
-  echo "   $ALLOWED_TYPES"
+  echo "   $TYPES"
   echo ""
   echo "   [Allowed Scopes]"
-  echo "   $ALLOWED_SCOPES"
+  echo "   $SCOPES"
   echo "----------------------------------------------------"
   exit 1
 fi
