@@ -1,3 +1,17 @@
+pre-commit:
+  parallel: true
+  commands:
+    lint:
+      glob: "*.go"
+      run: golangci-lint run --fix {staged_files}
+      stage_fixed: true
+    fix-typos:
+      run: typos --write-changes {staged_files}
+      stage_fixed: true
+    links:
+      glob: "*.md"
+      run: lychee {staged_files}
+
 commit-msg:
   commands:
     "lint-commit-msg":
