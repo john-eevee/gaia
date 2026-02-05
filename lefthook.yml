@@ -1,0 +1,6 @@
+commit-msg:
+  commands:
+    "lint-commit-msg":
+      run: ./scripts/validate-commit.sh {1}
+      runner: bash
+
