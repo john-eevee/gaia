@@ -1,6 +1,7 @@
 package mtls
 
 import (
+	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"math/big"
@@ -496,5 +497,578 @@ func TestBuildCertificateInfoValidity(t *testing.T) {
 			cert.NotAfter,
 			expectedNotAfter,
 		)
+	}
+}
+
+// TestCreateCSRCertificateSuccess tests successful CSR certificate creation
+func TestCreateCSRCertificateSuccess(t *testing.T) {
+	config := Config{
+		Organization:  "Test Org",
+		Country:       "US",
+		Province:      "CA",
+		Locality:      "San Francisco",
+		StreetAddress: "123 Main St",
+		PostalCode:    "94105",
+		CommonName:    "test.example.com",
+	}
+
+	csr, err := CreateCSRCertificate(config)
+	if err != nil {
+		t.Fatalf("CreateCSRCertificate failed: %v", err)
+	}
+
+	// Verify all three components are present
+	if len(csr.CSR) == 0 {
+		t.Error("CSR is empty")
+	}
+	if len(csr.PrivateKey) == 0 {
+		t.Error("PrivateKey is empty")
+	}
+	if len(csr.PublicKey) == 0 {
+		t.Error("PublicKey is empty")
+	}
+}
+
+// TestCreateCSRCertificateCSRFormat tests that CSR is in valid PEM format
+func TestCreateCSRCertificateCSRFormat(t *testing.T) {
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+
+	csr, err := CreateCSRCertificate(config)
+	if err != nil {
+		t.Fatalf("CreateCSRCertificate failed: %v", err)
+	}
+
+	// Verify CSR is PEM encoded
+	block, _ := pem.Decode(csr.CSR)
+	if block == nil {
+		t.Fatal("CSR is not valid PEM format")
+	}
+
+	if block.Type != "CERTIFICATE REQUEST" {
+		t.Errorf("PEM block type should be 'CERTIFICATE REQUEST', got '%s'", block.Type)
+	}
+
+	// Verify it can be parsed as a valid X.509 certificate request
+	csrParsed, err := x509.ParseCertificateRequest(block.Bytes)
+	if err != nil {
+		t.Errorf("Failed to parse CSR: %v", err)
+	}
+
+	// Verify the CSR subject matches config
+	if len(csrParsed.Subject.Organization) == 0 || csrParsed.Subject.Organization[0] != config.Organization {
+		t.Errorf("Organization mismatch in CSR")
+	}
+	if len(csrParsed.Subject.Country) == 0 || csrParsed.Subject.Country[0] != config.Country {
+		t.Errorf("Country mismatch in CSR")
+	}
+}
+
+// TestCreateCSRCertificatePrivateKeyFormat tests that private key is in valid PEM format
+func TestCreateCSRCertificatePrivateKeyFormat(t *testing.T) {
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+
+	csr, err := CreateCSRCertificate(config)
+	if err != nil {
+		t.Fatalf("CreateCSRCertificate failed: %v", err)
+	}
+
+	// Verify private key is PEM encoded
+	block, _ := pem.Decode(csr.PrivateKey)
+	if block == nil {
+		t.Fatal("Private key is not valid PEM format")
+	}
+
+	if block.Type != "RSA PRIVATE KEY" {
+		t.Errorf("PEM block type should be 'RSA PRIVATE KEY', got '%s'", block.Type)
+	}
+
+	// Verify it can be parsed as a valid RSA private key
+	_, err = x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+		t.Errorf("Failed to parse private key: %v", err)
+	}
+}
+
+// TestCreateCSRCertificatePublicKeyFormat tests that public key is in valid PEM format
+func TestCreateCSRCertificatePublicKeyFormat(t *testing.T) {
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+
+	csr, err := CreateCSRCertificate(config)
+	if err != nil {
+		t.Fatalf("CreateCSRCertificate failed: %v", err)
+	}
+
+	// Verify public key is PEM encoded
+	block, _ := pem.Decode(csr.PublicKey)
+	if block == nil {
+		t.Fatal("Public key is not valid PEM format")
+	}
+
+	if block.Type != "PUBLIC KEY" {
+		t.Errorf("PEM block type should be 'PUBLIC KEY', got '%s'", block.Type)
+	}
+
+	// Verify it can be parsed as a valid public key
+	_, err = x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		t.Errorf("Failed to parse public key: %v", err)
+	}
+}
+
+// TestCreateCSRCertificateKeyPairConsistency tests that public and private keys are consistent
+func TestCreateCSRCertificateKeyPairConsistency(t *testing.T) {
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+
+	csr, err := CreateCSRCertificate(config)
+	if err != nil {
+		t.Fatalf("CreateCSRCertificate failed: %v", err)
+	}
+
+	// Parse private key
+	privKeyBlock, _ := pem.Decode(csr.PrivateKey)
+	privKey, err := x509.ParsePKCS1PrivateKey(privKeyBlock.Bytes)
+	if err != nil {
+		t.Fatalf("Failed to parse private key: %v", err)
+	}
+
+	// Parse public key
+	pubKeyBlock, _ := pem.Decode(csr.PublicKey)
+	pubKey, err := x509.ParsePKIXPublicKey(pubKeyBlock.Bytes)
+	if err != nil {
+		t.Fatalf("Failed to parse public key: %v", err)
+	}
+
+	// Verify they form a valid pair
+	rsaPubKey, ok := pubKey.(*rsa.PublicKey)
+	if !ok {
+		t.Fatal("Public key is not an RSA public key")
+	}
+
+	// Check that the public components match
+	if privKey.N.Cmp(rsaPubKey.N) != 0 {
+		t.Error("Public key modulus mismatch between private and public keys")
+	}
+	if privKey.E != rsaPubKey.E {
+		t.Error("Public key exponent mismatch between private and public keys")
+	}
+}
+
+// TestCreateCSRCertificateSubject tests that CSR subject is correct
+func TestCreateCSRCertificateSubject(t *testing.T) {
+	config := Config{
+		Organization:  "Test Org Inc",
+		Country:       "US",
+		Province:      "California",
+		Locality:      "San Francisco",
+		StreetAddress: "456 Oak Ave",
+		PostalCode:    "94102",
+		CommonName:    "csr.example.com",
+	}
+
+	csr, err := CreateCSRCertificate(config)
+	if err != nil {
+		t.Fatalf("CreateCSRCertificate failed: %v", err)
+	}
+
+	// Parse CSR
+	block, _ := pem.Decode(csr.CSR)
+	if block == nil {
+		t.Fatalf("Failed to parse CSR PEM")
+	}
+
+	csrParsed, err := x509.ParseCertificateRequest(block.Bytes)
+	if err != nil {
+		t.Fatalf("Failed to parse CSR: %v", err)
+	}
+
+	// Verify subject fields
+	if len(csrParsed.Subject.Organization) == 0 || csrParsed.Subject.Organization[0] != config.Organization {
+		t.Errorf("Organization mismatch. Expected %s, got %v",
+			config.Organization, csrParsed.Subject.Organization)
+	}
+
+	if len(csrParsed.Subject.Country) == 0 || csrParsed.Subject.Country[0] != config.Country {
+		t.Errorf("Country mismatch. Expected %s, got %v",
+			config.Country, csrParsed.Subject.Country)
+	}
+
+	if len(csrParsed.Subject.Province) == 0 || csrParsed.Subject.Province[0] != config.Province {
+		t.Errorf("Province mismatch. Expected %s, got %v",
+			config.Province, csrParsed.Subject.Province)
+	}
+
+	if len(csrParsed.Subject.Locality) == 0 || csrParsed.Subject.Locality[0] != config.Locality {
+		t.Errorf("Locality mismatch. Expected %s, got %v",
+			config.Locality, csrParsed.Subject.Locality)
+	}
+
+	if len(csrParsed.Subject.StreetAddress) == 0 ||
+		csrParsed.Subject.StreetAddress[0] != config.StreetAddress {
+		t.Errorf("StreetAddress mismatch. Expected %s, got %v",
+			config.StreetAddress, csrParsed.Subject.StreetAddress)
+	}
+
+	if len(csrParsed.Subject.PostalCode) == 0 || csrParsed.Subject.PostalCode[0] != config.PostalCode {
+		t.Errorf("PostalCode mismatch. Expected %s, got %v",
+			config.PostalCode, csrParsed.Subject.PostalCode)
+	}
+
+	if csrParsed.Subject.CommonName != config.CommonName {
+		t.Errorf("CommonName mismatch. Expected %s, got %s",
+			config.CommonName, csrParsed.Subject.CommonName)
+	}
+}
+
+// TestCreateCSRCertificateRandomKeyGeneration tests that each CSR has unique keys
+func TestCreateCSRCertificateRandomKeyGeneration(t *testing.T) {
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+
+	// Generate multiple CSRs and collect their public keys
+	publicKeys := make([]string, 5)
+	for i := 0; i < 5; i++ {
+		csr, err := CreateCSRCertificate(config)
+		if err != nil {
+			t.Fatalf("CreateCSRCertificate failed: %v", err)
+		}
+
+		// Parse public key
+		block, _ := pem.Decode(csr.PublicKey)
+		if block == nil {
+			t.Fatalf("Failed to parse public key PEM")
+		}
+
+		publicKeys[i] = string(csr.PublicKey)
+	}
+
+	// Verify all public keys are unique
+	uniqueKeys := make(map[string]bool)
+	for _, key := range publicKeys {
+		if uniqueKeys[key] {
+			t.Error("Duplicate public key found across multiple CSR generations")
+		}
+		uniqueKeys[key] = true
+	}
+
+	if len(uniqueKeys) != 5 {
+		t.Errorf("Expected 5 unique keys, got %d", len(uniqueKeys))
+	}
+}
+
+// Helper function to verify PEM armor lines
+func verifyPEMArmor(t *testing.T, pemData []byte, expectedType string) {
+	pemStr := string(pemData)
+
+	// Verify BEGIN line exists
+	beginLine := "-----BEGIN " + expectedType + "-----"
+	if !strings.Contains(pemStr, beginLine) {
+		t.Errorf("Missing PEM BEGIN armor. Expected '%s' in:\n%s", beginLine, pemStr)
+	}
+
+	// Verify END line exists
+	endLine := "-----END " + expectedType + "-----"
+	if !strings.Contains(pemStr, endLine) {
+		t.Errorf("Missing PEM END armor. Expected '%s' in:\n%s", endLine, pemStr)
+	}
+
+	// Verify BEGIN comes before END
+	beginIdx := strings.Index(pemStr, beginLine)
+	endIdx := strings.Index(pemStr, endLine)
+	if beginIdx >= endIdx {
+		t.Errorf("PEM BEGIN armor should come before END armor. BEGIN at %d, END at %d", beginIdx, endIdx)
+	}
+
+	// Verify data exists between BEGIN and END
+	if endIdx-beginIdx <= len(beginLine)+len(endLine) {
+		t.Error("PEM armor has no data between BEGIN and END lines")
+	}
+}
+
+// TestRootCACertificatePEMArmor tests that CA certificate has proper PEM armor lines
+func TestRootCACertificatePEMArmor(t *testing.T) {
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+
+	ca, err := CreateRootCA(config)
+	if err != nil {
+		t.Fatalf("CreateRootCA failed: %v", err)
+	}
+
+	verifyPEMArmor(t, ca.Certificate, "CERTIFICATE")
+}
+
+// TestRootCAPrivateKeyPEMArmor tests that CA private key has proper PEM armor lines
+func TestRootCAPrivateKeyPEMArmor(t *testing.T) {
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+
+	ca, err := CreateRootCA(config)
+	if err != nil {
+		t.Fatalf("CreateRootCA failed: %v", err)
+	}
+
+	verifyPEMArmor(t, ca.PrivateKey, "RSA PRIVATE KEY")
+}
+
+// TestCSRCertificateCSRPEMArmor tests that CSR has proper PEM armor lines
+func TestCSRCertificateCSRPEMArmor(t *testing.T) {
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+
+	csr, err := CreateCSRCertificate(config)
+	if err != nil {
+		t.Fatalf("CreateCSRCertificate failed: %v", err)
+	}
+
+	verifyPEMArmor(t, csr.CSR, "CERTIFICATE REQUEST")
+}
+
+// TestCSRCertificatePrivateKeyPEMArmor tests that CSR private key has proper PEM armor lines
+func TestCSRCertificatePrivateKeyPEMArmor(t *testing.T) {
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+
+	csr, err := CreateCSRCertificate(config)
+	if err != nil {
+		t.Fatalf("CreateCSRCertificate failed: %v", err)
+	}
+
+	verifyPEMArmor(t, csr.PrivateKey, "RSA PRIVATE KEY")
+}
+
+// TestCSRCertificatePublicKeyPEMArmor tests that CSR public key has proper PEM armor lines
+func TestCSRCertificatePublicKeyPEMArmor(t *testing.T) {
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+
+	csr, err := CreateCSRCertificate(config)
+	if err != nil {
+		t.Fatalf("CreateCSRCertificate failed: %v", err)
+	}
+
+	verifyPEMArmor(t, csr.PublicKey, "PUBLIC KEY")
+}
+
+// TestRootCACertificatePEMStartsWithArmor tests that certificate PEM starts with armor
+func TestRootCACertificatePEMStartsWithArmor(t *testing.T) {
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+
+	ca, err := CreateRootCA(config)
+	if err != nil {
+		t.Fatalf("CreateRootCA failed: %v", err)
+	}
+
+	pemStr := strings.TrimSpace(string(ca.Certificate))
+	expectedBegin := "-----BEGIN CERTIFICATE-----"
+
+	if !strings.HasPrefix(pemStr, expectedBegin) {
+		t.Errorf("Certificate PEM should start with '%s', got: %.50s...", expectedBegin, pemStr)
+	}
+}
+
+// TestRootCACertificatePEMEndsWithArmor tests that certificate PEM ends with armor
+func TestRootCACertificatePEMEndsWithArmor(t *testing.T) {
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+
+	ca, err := CreateRootCA(config)
+	if err != nil {
+		t.Fatalf("CreateRootCA failed: %v", err)
+	}
+
+	pemStr := strings.TrimSpace(string(ca.Certificate))
+	expectedEnd := "-----END CERTIFICATE-----"
+
+	if !strings.HasSuffix(pemStr, expectedEnd) {
+		t.Errorf("Certificate PEM should end with '%s', got: ...%.50s", expectedEnd, pemStr)
+	}
+}
+
+// TestRootCAPrivateKeyPEMStartsWithArmor tests that private key PEM starts with armor
+func TestRootCAPrivateKeyPEMStartsWithArmor(t *testing.T) {
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+
+	ca, err := CreateRootCA(config)
+	if err != nil {
+		t.Fatalf("CreateRootCA failed: %v", err)
+	}
+
+	pemStr := strings.TrimSpace(string(ca.PrivateKey))
+	expectedBegin := "-----BEGIN RSA PRIVATE KEY-----"
+
+	if !strings.HasPrefix(pemStr, expectedBegin) {
+		t.Errorf("Private key PEM should start with '%s', got: %.50s...", expectedBegin, pemStr)
+	}
+}
+
+// TestRootCAPrivateKeyPEMEndsWithArmor tests that private key PEM ends with armor
+func TestRootCAPrivateKeyPEMEndsWithArmor(t *testing.T) {
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+
+	ca, err := CreateRootCA(config)
+	if err != nil {
+		t.Fatalf("CreateRootCA failed: %v", err)
+	}
+
+	pemStr := strings.TrimSpace(string(ca.PrivateKey))
+	expectedEnd := "-----END RSA PRIVATE KEY-----"
+
+	if !strings.HasSuffix(pemStr, expectedEnd) {
+		t.Errorf("Private key PEM should end with '%s', got: ...%.50s", expectedEnd, pemStr)
+	}
+}
+
+// TestCSRCertificateCSRPEMStartsWithArmor tests that CSR PEM starts with armor
+func TestCSRCertificateCSRPEMStartsWithArmor(t *testing.T) {
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+
+	csr, err := CreateCSRCertificate(config)
+	if err != nil {
+		t.Fatalf("CreateCSRCertificate failed: %v", err)
+	}
+
+	pemStr := strings.TrimSpace(string(csr.CSR))
+	expectedBegin := "-----BEGIN CERTIFICATE REQUEST-----"
+
+	if !strings.HasPrefix(pemStr, expectedBegin) {
+		t.Errorf("CSR PEM should start with '%s', got: %.50s...", expectedBegin, pemStr)
+	}
+}
+
+// TestCSRCertificateCSRPEMEndsWithArmor tests that CSR PEM ends with armor
+func TestCSRCertificateCSRPEMEndsWithArmor(t *testing.T) {
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+
+	csr, err := CreateCSRCertificate(config)
+	if err != nil {
+		t.Fatalf("CreateCSRCertificate failed: %v", err)
+	}
+
+	pemStr := strings.TrimSpace(string(csr.CSR))
+	expectedEnd := "-----END CERTIFICATE REQUEST-----"
+
+	if !strings.HasSuffix(pemStr, expectedEnd) {
+		t.Errorf("CSR PEM should end with '%s', got: ...%.50s", expectedEnd, pemStr)
+	}
+}
+
+// TestCSRCertificatePrivateKeyPEMStartsWithArmor tests that CSR private key PEM starts with armor
+func TestCSRCertificatePrivateKeyPEMStartsWithArmor(t *testing.T) {
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+
+	csr, err := CreateCSRCertificate(config)
+	if err != nil {
+		t.Fatalf("CreateCSRCertificate failed: %v", err)
+	}
+
+	pemStr := strings.TrimSpace(string(csr.PrivateKey))
+	expectedBegin := "-----BEGIN RSA PRIVATE KEY-----"
+
+	if !strings.HasPrefix(pemStr, expectedBegin) {
+		t.Errorf("Private key PEM should start with '%s', got: %.50s...", expectedBegin, pemStr)
+	}
+}
+
+// TestCSRCertificatePrivateKeyPEMEndsWithArmor tests that CSR private key PEM ends with armor
+func TestCSRCertificatePrivateKeyPEMEndsWithArmor(t *testing.T) {
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+
+	csr, err := CreateCSRCertificate(config)
+	if err != nil {
+		t.Fatalf("CreateCSRCertificate failed: %v", err)
+	}
+
+	pemStr := strings.TrimSpace(string(csr.PrivateKey))
+	expectedEnd := "-----END RSA PRIVATE KEY-----"
+
+	if !strings.HasSuffix(pemStr, expectedEnd) {
+		t.Errorf("Private key PEM should end with '%s', got: ...%.50s", expectedEnd, pemStr)
+	}
+}
+
+// TestCSRCertificatePublicKeyPEMStartsWithArmor tests that CSR public key PEM starts with armor
+func TestCSRCertificatePublicKeyPEMStartsWithArmor(t *testing.T) {
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+
+	csr, err := CreateCSRCertificate(config)
+	if err != nil {
+		t.Fatalf("CreateCSRCertificate failed: %v", err)
+	}
+
+	pemStr := strings.TrimSpace(string(csr.PublicKey))
+	expectedBegin := "-----BEGIN PUBLIC KEY-----"
+
+	if !strings.HasPrefix(pemStr, expectedBegin) {
+		t.Errorf("Public key PEM should start with '%s', got: %.50s...", expectedBegin, pemStr)
+	}
+}
+
+// TestCSRCertificatePublicKeyPEMEndsWithArmor tests that CSR public key PEM ends with armor
+func TestCSRCertificatePublicKeyPEMEndsWithArmor(t *testing.T) {
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+
+	csr, err := CreateCSRCertificate(config)
+	if err != nil {
+		t.Fatalf("CreateCSRCertificate failed: %v", err)
+	}
+
+	pemStr := strings.TrimSpace(string(csr.PublicKey))
+	expectedEnd := "-----END PUBLIC KEY-----"
+
+	if !strings.HasSuffix(pemStr, expectedEnd) {
+		t.Errorf("Public key PEM should end with '%s', got: ...%.50s", expectedEnd, pemStr)
 	}
 }
