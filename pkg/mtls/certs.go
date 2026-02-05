@@ -42,8 +42,8 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// RSAKeySize defines the RSA key size for certificate generation
-const RSAKeySize = 4096
+// rsaKeySize defines the RSA key size for certificate generation
+const rsaKeySize = 4096
 
 // CreateRootCA creates a root certificate authority (CA) for mTLS.
 // This CA can be used to sign client signing requests (CSRs) and issue
@@ -57,21 +57,30 @@ func CreateRootCA(config Config) (CertificateAuthority, error) {
 	// Generate a random serial number for the certificate
 	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
-		return CertificateAuthority{}, fmt.Errorf("CreateRootCA: failed to generate serial number: %w", err)
+		return CertificateAuthority{}, fmt.Errorf(
+			"CreateRootCA: failed to generate serial number: %w",
+			err,
+		)
 	}
 
 	ca := buildCertificateInfo(config, serialNumber)
 
 	// Generate RSA private key
-	privateKey, err := rsa.GenerateKey(rand.Reader, RSAKeySize)
+	privateKey, err := rsa.GenerateKey(rand.Reader, rsaKeySize)
 	if err != nil {
-		return CertificateAuthority{}, fmt.Errorf("CreateRootCA: failed to generate private key: %w", err)
+		return CertificateAuthority{}, fmt.Errorf(
+			"CreateRootCA: failed to generate private key: %w",
+			err,
+		)
 	}
 
 	// Create the certificate
 	caBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, &privateKey.PublicKey, privateKey)
 	if err != nil {
-		return CertificateAuthority{}, fmt.Errorf("CreateRootCA: failed to generate certificate: %w", err)
+		return CertificateAuthority{}, fmt.Errorf(
+			"CreateRootCA: failed to generate certificate: %w",
+			err,
+		)
 	}
 
 	// Encode certificate to PEM format
@@ -80,7 +89,10 @@ func CreateRootCA(config Config) (CertificateAuthority, error) {
 		Type:  "CERTIFICATE",
 		Bytes: caBytes,
 	}); err != nil {
-		return CertificateAuthority{}, fmt.Errorf("CreateRootCA: failed to encode certificate to PEM: %w", err)
+		return CertificateAuthority{}, fmt.Errorf(
+			"CreateRootCA: failed to encode certificate to PEM: %w",
+			err,
+		)
 	}
 
 	// Encode private key to PEM format
@@ -89,7 +101,10 @@ func CreateRootCA(config Config) (CertificateAuthority, error) {
 		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
 	}); err != nil {
-		return CertificateAuthority{}, fmt.Errorf("CreateRootCA: failed to encode private key to PEM: %w", err)
+		return CertificateAuthority{}, fmt.Errorf(
+			"CreateRootCA: failed to encode private key to PEM: %w",
+			err,
+		)
 	}
 
 	return CertificateAuthority{
@@ -110,10 +125,13 @@ func buildCertificateInfo(config Config, serialNumber *big.Int) *x509.Certificat
 			StreetAddress: []string{config.StreetAddress},
 			PostalCode:    []string{config.PostalCode},
 		},
-		NotBefore:             now,
-		NotAfter:              now.AddDate(RootCAValidityYears, 0, 0),
-		IsCA:                  true,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		NotBefore: now,
+		NotAfter:  now.AddDate(RootCAValidityYears, 0, 0),
+		IsCA:      true,
+		ExtKeyUsage: []x509.ExtKeyUsage{
+			x509.ExtKeyUsageServerAuth,
+			x509.ExtKeyUsageClientAuth,
+		},
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
 		BasicConstraintsValid: true,
 	}
