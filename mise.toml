@@ -10,7 +10,7 @@ lychee = "0.22.0"
 
 [tasks.lint]
 description = "Lint all apps and packages"
-run = "golangci-lint run ./..."
+run = "./scripts/run-on.sh golangci-lint run"
 
 [tasks.format]
 description = "Format code strictly"
@@ -18,7 +18,12 @@ run = "gofumpt -l -w ."
 
 [tasks.vuln]
 description = "Check for vulnerabilities"
-run = "govulncheck ./..."
+run = "./scripts/run-on.sh govulncheck ./..."
+
+
+[tasks.test]
+description = "Tests the project and its sub apps"
+run = './scripts/run-on.sh go test -v ./...'
 
 [tasks.setup]
 description = "Setup the project"
