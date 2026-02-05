@@ -31,3 +31,20 @@ run = [
 [tasks.hooks]
 description = "Setup hooks"
 run = "lefthook install"
+
+[tasks."farm:build"]
+description = "Compiles the farm binary"
+run = "go build -o ./apps/farm/bin/farm ./apps/farm/cmd/main.go"
+
+[tasks."hub:build"]
+description = "Compiles the hub binary"
+run = "go build -o ./apps/hub/bin/hub ./apps/hub/cmd/main.go"
+
+[tasks."farm:dev"]
+description = "Runs Farm with live reload"
+run = 'air --build.cmd mise run hub:build --build.entrypoint ./apps/hub/bin/hub' 
+
+[tasks."hub:dev"]
+description = "Runs Hub with live reload"
+run = 'air --build.cmd mise run hub:build --build.entrypoint ./apps/hub/bin/hub' 
+
