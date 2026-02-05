@@ -498,15 +498,3 @@ func TestBuildCertificateInfoValidity(t *testing.T) {
 		)
 	}
 }
-
-// Benchmark test for certificate generation
-func BenchmarkCreateRootCA(b *testing.B) {
-	config := Config{
-		Organization: "Test Org",
-		Country:      "US",
-	}
-
-	for b.Loop() {
-		_, _ = CreateRootCA(config)
-	}
-}
