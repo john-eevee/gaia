@@ -6,6 +6,10 @@ pre-commit:
       glob: "*.go"
       run: golangci-lint run --fix {staged_files}
       stage_fixed: true
+    format:
+      glob: "*.go"
+      run: gofumpt -w -l {staged_files}
+      stage_files: true
     fix-typos:
       run: typos --write-changes {staged_files}
       stage_fixed: true
