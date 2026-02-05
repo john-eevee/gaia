@@ -15,8 +15,9 @@ import (
 // RootCAValidityYears defines the validity period for Root CA certificates
 const RootCAValidityYears = 10
 
-// rsaKeySize defines the RSA key size for certificate generation
-const rsaKeySize = 4096
+// rsaKeySize defines the RSA key size for certificate generation (4096 for production, 2048 for tests)
+// This can be overridden using build tags for testing purposes
+var rsaKeySize = 4096
 
 // CertificateAuthority represents a root certificate authority (CA) with its private key and certificate.
 type CertificateAuthority struct {

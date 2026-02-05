@@ -10,6 +10,12 @@ import (
 	"time"
 )
 
+// Override rsaKeySize to 2048 for faster tests (400%+ speedup)
+// Production code uses 4096, tests use 2048 which is still cryptographically valid
+func init() {
+	rsaKeySize = 2048
+}
+
 // TestCreateRootCASuccess tests successful Root CA creation with valid config
 func TestCreateRootCASuccess(t *testing.T) {
 	config := Config{
