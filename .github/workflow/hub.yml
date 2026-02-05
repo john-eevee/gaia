@@ -1,0 +1,20 @@
+name: Co-op Hub CI
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'apps/coop-hub/**'
+      - 'pkg/**'
+      - 'go.work'
+  pull_request:
+    paths:
+      - 'apps/coop-hub/**'
+      - 'pkg/**'
+      - 'go.work'
+
+jobs:
+  ci-pipeline:
+    uses: ./.github/workflows/reusable-go-ci.yml
+    with:
+      app_dir: "apps/coop-hub"
