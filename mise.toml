@@ -37,6 +37,15 @@ run = [
 description = "Setup hooks"
 run = "lefthook install"
 
+[tasks."hub:generate"]
+description = "Generate GraphQL code for Hub"
+dir = "apps/hub"
+run = "go run github.com/99designs/gqlgen generate"
+
+[tasks.generate]
+description = "Generate all code"
+depends = ["hub:generate"]
+
 [tasks."farm:build"]
 description = "Compiles the farm binary"
 run = "go build -o ./apps/farm/bin/farm ./apps/farm/cmd/main.go"
