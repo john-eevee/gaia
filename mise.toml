@@ -7,6 +7,7 @@ lychee = "0.22.0"
 "go:golang.org/x/vuln/cmd/govulncheck" = "v1.1.4"
 "go:github.com/air-verse/air" = "v1.64.5"
 "go:github.com/evilmartians/lefthook/v2" = "v2.1.0"
+hugo-extended = "latest"
 
 [tasks.lint]
 description = "Lint all apps and packages"
@@ -53,3 +54,7 @@ run = 'air --build.cmd mise run hub:build --build.entrypoint ./apps/hub/bin/hub'
 description = "Runs Hub with live reload"
 run = 'air --build.cmd mise run hub:build --build.entrypoint ./apps/hub/bin/hub' 
 
+[tasks."docs:dev"]
+description = "Runs the documentation website"
+dir = "website"
+run = 'hugo server -D --bind 0.0.0.0'
