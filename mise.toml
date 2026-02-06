@@ -54,3 +54,7 @@ run = 'air --build.cmd mise run hub:build --build.entrypoint ./apps/hub/bin/hub'
 description = "Runs Hub with live reload"
 run = 'air --build.cmd mise run hub:build --build.entrypoint ./apps/hub/bin/hub' 
 
+[tasks."docs:dev"]
+description = "Runs the documentation website"
+dir = "website"
+run = 'hugo server -D --bind 0.0.0.0'
