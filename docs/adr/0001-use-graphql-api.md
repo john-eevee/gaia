@@ -1,19 +1,19 @@
-# 1. Use GraphQL as the Co-op Hub Interface Protocol
+# 1. Use GraphQL as the Hub Interface Protocol
 
 Date: 2026-02-05
 Status: **Accepted**
 
 ## Context
-Project Gaia aims to build a distributed smart agriculture system where the "Co-op Hub" (the central management software) is not a black box, but a replaceable component.
+Project Gaia aims to build a distributed smart agriculture system where the "Hub" (the central management software) is not a black box, but a replaceable component.
 
 The system faces the following requirements:
-1.  **Swappability (Resyndication):** A community of farmers must be able to replace the official Go implementation of the Hub with an alternative (e.g., Rust, Elixir, Python) without breaking their existing edge devices (Farm Nodes) or client tools.
+1.  **Swappability (Resyndication):** A community of farmers must be able to replace the official Go implementation of the Hub with an alternative (e.g., Rust, Elixir, Python) without breaking their existing edge devices (Farms) or client tools.
 2.  **Client Diversity:** The system must support the official Web Dashboard (SPA) while simultaneously enabling "Headless" operation via CLI tools, mobile apps, or third-party automation scripts created by farmers.
 3.  **Bandwidth Constraints:** Farm environments often have poor connectivity. Clients need to request exact data requirements to minimize payload size (avoiding over-fetching).
-4.  **Strict Contract:** There must be a clear, enforceable "Constitution" that defines what a Co-op is, independent of the implementation code.
+4.  **Strict Contract:** There must be a clear, enforceable "Constitution" that defines what a Hub is, independent of the implementation code.
 
 ## Decision
-We will use **GraphQL** as the primary API paradigm for the Co-op Hub, specifically adopting a **Schema-First** approach.
+We will use **GraphQL** as the primary API paradigm for the Hub, specifically adopting a **Schema-First** approach.
 
 We will use the **[gqlgen](https://github.com/99designs/gqlgen)** library for the Go implementation to enforce strict typing and code generation based on the schema.
 
@@ -35,4 +35,4 @@ The GraphQL Schema (`.graphql` files) will reside in the shared `pkg/` directory
 ## Compliance
 1.  The schema files must be stored in `pkg/graph/schema.graphql`.
 2.  Any change to the API structure requires a Pull Request to the `pkg` module first.
-3.  The `apps/coop-hub` build pipeline must fail if the generated Go code is out of sync with the schema.
+3.  The `apps/hub` build pipeline must fail if the generated Go code is out of sync with the schema.

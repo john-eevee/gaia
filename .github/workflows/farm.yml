@@ -1,10 +1,10 @@
-name: Farm Node CI
+name: Farm CI
 
 on:
   push:
     branches: ["main"]
     paths:
-      - "apps/farm-node/**"
+      - "apps/farm/**"
       - "pkg/**"
       - "go.work"
   pull_request:

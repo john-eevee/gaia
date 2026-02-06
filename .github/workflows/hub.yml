@@ -1,4 +1,4 @@
-name: Co-op Hub CI
+name: Hub CI
 
 on:
   push:

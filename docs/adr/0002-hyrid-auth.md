@@ -4,12 +4,12 @@ Date: 2026-02-05
 Status: **Accepted**
 
 ## Context
-The Co-op Hub must serve two distinct classes of clients with contradictory security requirements:
-1.  **Farm Nodes (Hardware):** Unattended, low-power devices. They require zero-touch authentication. mTLS (Mutual TLS) is the ideal standard here, as it authenticates the device at the connection layer using the hardware-burned identity.
+The Hub must serve two distinct classes of clients with contradictory security requirements:
+1.  **Farms (Hardware):** Unattended, low-power devices. They require zero-touch authentication. mTLS (Mutual TLS) is the ideal standard here, as it authenticates the device at the connection layer using the hardware-burned identity.
 2.  **Farmers & 3rd Party Tools (Humans/Software):** Web Dashboards, Mobile Apps, and custom scripts. These clients typically cannot manage client-side certificates easily and expect standard Token-based auth (JWT) over HTTPS.
 
 **The Privacy Constraint:**
-Project Gaia enforces a **"Privacy First"** architecture. Data resides on the Farm Node by default. The Co-op Hub is a shared aggregation point, not a master controller. Therefore, authentication as a "Farmer" (via JWT) must not grant unrestricted access to the live Farm Node, but *only* to data the farmer has explicitly chosen to export/syndicate to the Hub.
+Project Gaia enforces a **"Privacy First"** architecture. Data resides on the Farm by default. The Hub is a shared aggregation point, not a master controller. Therefore, authentication as a "Farmer" (via JWT) must not grant unrestricted access to the live Farm, but *only* to data the farmer has explicitly chosen to export/syndicate to the Hub.
 
 **The Conflict:**
 Enforcing strict mTLS (`tls.RequireAndVerifyClientCert`) at the server level rejects all standard web clients. Additionally, maintaining an external OCSP responder contradicts the "single binary" deployment goal.
@@ -26,7 +26,7 @@ We will implement a **Dual-Path Hybrid Authentication** system on a single HTTPS
 
 ### Data Scoping & Privacy Rule
 Authentication does not imply data visibility. The Hub enforces a strict separation:
-* **The Hub is NOT a Proxy:** The Hub API will not forward queries to the live Farm Node to fetch private data.
+* **The Hub is NOT a Proxy:** The Hub API will not forward queries to the live Farm to fetch private data.
 * **Export-Only Access:** A user authenticated as `FARMER` can only query data that has been **previously synchronized/exported** from the Node to the Hub (e.g., aggregated yields, public proposals).
 * **Private by Default:** Granular sensor logs, private journals, or raw operational data remaining on the Node are cryptographically inaccessible to the Hub's JWT scope.
 

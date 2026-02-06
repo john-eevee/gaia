@@ -2,8 +2,8 @@
 
 ## 1. Project Context
 **Project Gaia** is a distributed smart agriculture cooperative system written in **Go (Golang)** using a **monorepo** structure.
-- **Farm Node (`apps/farm`):** Lightweight edge software running on hardware at the farm.
-- **Co-op Hub (`apps/hub`):** Central cloud management system.
+- **Farm (`apps/farm`):** Lightweight edge software running on hardware at the farm.
+- **Hub (`apps/hub`):** Central cloud management system.
 - **Shared Pkg (`pkg/`):** Shared libraries (mTLS, protocols, syndicate logic).
 
 ## 2. Agent Behavior Protocols
@@ -62,8 +62,8 @@ We use **Lefthook** to enforce strict Conventional Commits.
 
 * **Allowed Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`
 * **Allowed Scopes:**
-* `farm` (Farm Node specific)
-* `hub` (Co-op Hub specific)
+* `farm` (Farm specific)
+* `hub` (Hub specific)
 * `pkg` (Shared libraries)
 * `infra` (Docker, Terraform, CI)
 * `deps` (Dependency updates)
