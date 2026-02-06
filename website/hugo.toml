@@ -3,19 +3,20 @@ languageCode = 'en-us'
 title = 'Project Gaia'
 theme = ["github.com/alex-shpak/hugo-book"]
 
-[[module.mounts]]
-source = 'content'
-target = 'content'
+[module]
+  [[module.mounts]]
+  source = 'content'
+  target = 'content'
 
 
-[[module.mounts]]
-source = '../docs/adr'
-target = 'content/adrs'
+  [[module.mounts]]
+  source = '../docs/adr'
+  target = 'content/adrs'
 
-[[module.mounts]]
-source = '../apps/farm/docs'
-target = 'content/apps/farm'
+  [[module.mounts]]
+  source = '../apps/farm/docs'
+  target = 'content/apps/farm'
 
-[[module.mounts]]
-source = '../apps/hub/docs'
-target = 'content/apps/hub'
+  [[module.mounts]]
+  source = '../apps/hub/docs'
+  target = 'content/apps/hub'
