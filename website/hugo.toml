@@ -2,8 +2,12 @@ baseURL = 'https://john-eevee.github.io/gaia/'
 languageCode = 'en-us'
 title = 'Project Gaia'
 theme = ["github.com/alex-shpak/hugo-book"]
+
 [params]
   BookPortableLinks = true
+  BookToC = true
+  BookCollapseSection = true
+  BookMenuBundle = "/menu"
   [params.mermaid]
     enable = true
 [module]
