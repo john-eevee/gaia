@@ -113,28 +113,36 @@ Recommended follow-ups for `pkg/mtls`:
 - Add optional CSR policy enforcement in `SignCSR` or a wrapper: reject CSRs that don't include required SANs/CN format or that request disallowed extensions.
 - Consider returning parsed certificate metadata (serial, fingerprint) from `SignCSR` in addition to PEM for easier db recording.
 
-## Example sequence (ASCII diagram)
+## Example sequence (Mermaid)
 
 Admin issues OTPK (in-person delivery recommended):
 
-  [Admin] --(create provision key)--> [Hub:ProvisioningKeys]
-  [Admin] --(print card / show QR)--> [Farmer]
+```mermaid
+sequenceDiagram
+    participant Admin
+    participant Hub
+    participant Farmer
+
+    Admin->>Hub: create provision key
+    Hub-->>Admin: display OTPK (one-time view / QR / printable)
+    Admin->>Farmer: hand-deliver OTPK (paper/QR)
+```
 
 Farm bootstrapping flow:
 
-  [Farmer Device]
-    generate RSA-4096 keypair (private stays here)
-    create CSR (PEM) ----------------------+
-                                         |  HTTPS (no mTLS yet)
-  [Farmer Device] --(CSR + OTPK)--------->[Hub: provisionFarm mutation]
-                                         |  validate OTPK (hash), validate CSR
-                                         |  sign CSR with CA (SignCSR)
-                                         |  mark OTPK used, persist audit
-                                         v
-                                      [Hub responds with signed certificate PEM]
-  [Farmer Device] <-(certificate PEM)---+
-    store certificate + private key (local)
-    configure mTLS for future connections
+```mermaid
+sequenceDiagram
+    participant FarmerDevice as "Farmer Device"
+    participant Hub
+
+    FarmerDevice->>FarmerDevice: generate RSA-4096 keypair (private stays local)
+    FarmerDevice->>Hub: POST CSR + OTPK (HTTPS, no mTLS yet)
+    Hub->>Hub: validate OTPK (hash match, expiry, unused)
+    Hub->>Hub: validate CSR (parse, signature, policy)
+    Hub->>Hub: sign CSR with CA (SignCSR)
+    Hub-->>FarmerDevice: return signed certificate PEM
+    FarmerDevice->>FarmerDevice: store certificate + private key; enable mTLS
+```
 
 ## Edge cases and considerations
 - Race conditions: two simultaneous attempts using the same OTPK must result in at most one successful provisioning. Implement database-level uniqueness/locking or a "used_at" CAS update to ensure single-use.

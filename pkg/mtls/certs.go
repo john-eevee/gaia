@@ -46,6 +46,77 @@ type CSRCertificate struct {
 }
 
 // ============================================================================
+// CA Methods (Public)
+// ============================================================================
+
+// SignCSR signs a PEM-encoded CSR and returns a PEM-encoded certificate.
+func (ca *CertificateAuthority) SignCSR(csrPem []byte, validityDays int) ([]byte, error) {
+	// Parse the CA certificate
+	caBlock, _ := pem.Decode(ca.Certificate)
+	if caBlock == nil {
+		return nil, fmt.Errorf("SignCSR: failed to decode CA certificate")
+	}
+	caCert, err := x509.ParseCertificate(caBlock.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("SignCSR: failed to parse CA certificate: %w", err)
+	}
+
+	// Parse the CA private key
+	keyBlock, _ := pem.Decode(ca.PrivateKey)
+	if keyBlock == nil {
+		return nil, fmt.Errorf("SignCSR: failed to decode CA private key")
+	}
+	caKey, err := x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("SignCSR: failed to parse CA private key: %w", err)
+	}
+
+	// Parse the CSR
+	csrBlock, _ := pem.Decode(csrPem)
+	if csrBlock == nil {
+		return nil, fmt.Errorf("SignCSR: failed to decode CSR")
+	}
+	csr, err := x509.ParseCertificateRequest(csrBlock.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("SignCSR: failed to parse CSR: %w", err)
+	}
+
+	// Check CSR signature
+	if err := csr.CheckSignature(); err != nil {
+		return nil, fmt.Errorf("SignCSR: CSR signature check failed: %w", err)
+	}
+
+	// Prepare certificate template
+	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	if err != nil {
+		return nil, fmt.Errorf("SignCSR: failed to generate serial number: %w", err)
+	}
+
+	notBefore := time.Now()
+	notAfter := notBefore.AddDate(0, 0, validityDays)
+
+	template := &x509.Certificate{
+		SerialNumber:          serialNumber,
+		Subject:               csr.Subject,
+		NotBefore:             notBefore,
+		NotAfter:              notAfter,
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+		IsCA:                  false,
+	}
+
+	// Sign the certificate
+	certBytes, err := x509.CreateCertificate(rand.Reader, template, caCert, csr.PublicKey, caKey)
+	if err != nil {
+		return nil, fmt.Errorf("SignCSR: failed to sign certificate: %w", err)
+	}
+
+	// Encode to PEM
+	return encodePEM("CERTIFICATE", certBytes)
+}
+
+// ============================================================================
 // Config Methods (Public)
 // ============================================================================
 
