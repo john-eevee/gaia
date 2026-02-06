@@ -1,7 +1,7 @@
 baseURL = 'https://john-eevee.github.io/gaia/'
 languageCode = 'en-us'
 title = 'Project Gaia'
-theme = 'book'
+theme = ["github.com/alex-shpak/hugo-book"]
 
 [[module.mounts]]
 source = 'content'
