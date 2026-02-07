@@ -3,6 +3,7 @@ package mtls
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -28,9 +29,7 @@ const (
 // RootCAValidityYears defines the validity period for Root CA certificates
 const RootCAValidityYears = 10
 
-// rsaKeySize defines the RSA key size for certificate generation (4096 for production, 2048 for tests)
-// This can be overridden using build tags for testing purposes
-var rsaKeySize = 4096
+// (previously RSA) key size removed — Ed25519 uses fixed-size keys
 
 // CertificateAuthority represents a root certificate authority (CA) with its private key and certificate.
 type CertificateAuthority struct {
@@ -160,17 +159,16 @@ func CreateRootCA(config Config) (CertificateAuthority, error) {
 
 	ca := buildCertificateInfo(config, serialNumber)
 
-	// Generate RSA private key
-	privateKey, err := rsa.GenerateKey(rand.Reader, rsaKeySize)
+	// Generate Ed25519 private key
+	pub, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return CertificateAuthority{}, fmt.Errorf(
-			"CreateRootCA: failed to generate private key: %w",
-			err,
+			"CreateRootCA: failed to generate private key: %w", err,
 		)
 	}
 
 	// Create the certificate
-	caBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, &privateKey.PublicKey, privateKey)
+	caBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, pub, privateKey)
 	if err != nil {
 		return CertificateAuthority{}, fmt.Errorf(
 			"CreateRootCA: failed to generate certificate: %w",
@@ -238,7 +236,8 @@ func CreateCSRCertificate(config Config) (CSRCertificate, error) {
 	csr := x509.CertificateRequest{
 		Subject: config.toPKI(),
 	}
-	privateKey, err := rsa.GenerateKey(rand.Reader, rsaKeySize)
+	// generate Ed25519 key for CSR
+	pub, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return CSRCertificate{}, fmt.Errorf(
 			"CreateCSRCertificate: error generating CSR private key: %w",
@@ -270,7 +269,7 @@ func CreateCSRCertificate(config Config) (CSRCertificate, error) {
 	}
 
 	// Encode public key to PEM format
-	publicKeyPem, err := encodePublicKeyPEM(&privateKey.PublicKey)
+	publicKeyPem, err := encodePublicKeyPEM(pub)
 	if err != nil {
 		return CSRCertificate{}, fmt.Errorf(
 			"CreateCSRCertificate: %w", err,
@@ -319,8 +318,8 @@ func encodePrivateKeyPEM(privateKey interface{}) ([]byte, error) {
 	return encodePEM(pemTypePrivateKey, pkcs8Bytes)
 }
 
-// encodePublicKeyPEM encodes an RSA public key to PEM format
-func encodePublicKeyPEM(publicKey *rsa.PublicKey) ([]byte, error) {
+// encodePublicKeyPEM encodes a public key (RSA, ECDSA, Ed25519, etc) to PEM format
+func encodePublicKeyPEM(publicKey interface{}) ([]byte, error) {
 	publicKeyBytes, err := x509.MarshalPKIXPublicKey(publicKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal public key: %w", err)
@@ -353,6 +352,7 @@ func decodeCAPrivateKey(keyPem []byte) (interface{}, error) {
 
 	switch keyBlock.Type {
 	case pemTypeRSAPrivateKey:
+		// legacy PKCS#1 RSA private key
 		privKey, err := x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
 		if err != nil {
 			return nil, fmt.Errorf("LoadRootCA: failed to parse PKCS1 private key: %w", err)
@@ -396,6 +396,15 @@ func verifyKeyMatchesCert(key interface{}, cert *x509.Certificate) error {
 		// ecdsa.PrivateKey embeds PublicKey; compare promoted fields directly.
 		if k.X.Cmp(pub.X) != 0 || k.Y.Cmp(pub.Y) != 0 {
 			return errors.New("ecdsa public key mismatch")
+		}
+		return nil
+	case ed25519.PrivateKey:
+		pub, ok := cert.PublicKey.(ed25519.PublicKey)
+		if !ok {
+			return errors.New("certificate public key is not Ed25519")
+		}
+		if !bytes.Equal(k.Public().(ed25519.PublicKey), pub) {
+			return errors.New("ed25519 public key mismatch")
 		}
 		return nil
 	default:

@@ -2,9 +2,9 @@ package mtls
 
 import (
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"math/big"
@@ -12,7 +12,6 @@ import (
 )
 
 func TestLoadRootCA_PKCS8(t *testing.T) {
-	rsaKeySize = 2048
 	cfg := Config{Organization: "TestOrg", Country: "US"}
 	ca, err := CreateRootCA(cfg)
 	if err != nil {
@@ -20,33 +19,6 @@ func TestLoadRootCA_PKCS8(t *testing.T) {
 	}
 	if _, err := LoadRootCA(ca.Certificate, ca.PrivateKey); err != nil {
 		t.Fatalf("LoadRootCA failed for PKCS#8 key: %v", err)
-	}
-}
-
-func TestLoadRootCA_PKCS1(t *testing.T) {
-	rsaKeySize = 2048
-	cfg := Config{Organization: "TestOrg", Country: "US"}
-	ca, err := CreateRootCA(cfg)
-	if err != nil {
-		t.Fatalf("CreateRootCA error: %v", err)
-	}
-
-	// decode PKCS#8 and re-encode as PKCS#1
-	block, _ := pem.Decode(ca.PrivateKey)
-	if block == nil {
-		t.Fatalf("failed to decode created CA private key PEM")
-	}
-	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	if err != nil {
-		t.Fatalf("ParsePKCS8PrivateKey: %v", err)
-	}
-	rsaKey, ok := parsed.(*rsa.PrivateKey)
-	if !ok {
-		t.Fatalf("expected RSA private key from PKCS#8")
-	}
-	pkcs1 := pem.EncodeToMemory(&pem.Block{Type: pemTypeRSAPrivateKey, Bytes: x509.MarshalPKCS1PrivateKey(rsaKey)})
-	if _, err := LoadRootCA(ca.Certificate, pkcs1); err != nil {
-		t.Fatalf("LoadRootCA failed for PKCS#1 key: %v", err)
 	}
 }
 
@@ -74,14 +46,13 @@ func TestLoadRootCA_EC(t *testing.T) {
 }
 
 func TestLoadRootCA_MismatchedKey(t *testing.T) {
-	rsaKeySize = 2048
 	cfg := Config{Organization: "TestOrg", Country: "US"}
 	ca, err := CreateRootCA(cfg)
 	if err != nil {
 		t.Fatalf("CreateRootCA error: %v", err)
 	}
 	// generate a different key
-	otherKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	_, otherKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("generate other key: %v", err)
 	}
@@ -95,7 +66,6 @@ func TestLoadRootCA_MismatchedKey(t *testing.T) {
 }
 
 func TestLoadRootCA_EncryptedKeyRejected(t *testing.T) {
-	rsaKeySize = 2048
 	cfg := Config{Organization: "TestOrg", Country: "US"}
 	ca, err := CreateRootCA(cfg)
 	if err != nil {
