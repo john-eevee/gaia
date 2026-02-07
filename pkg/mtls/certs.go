@@ -31,6 +31,50 @@ const RootCAValidityYears = 10
 
 // (previously RSA) key size removed — Ed25519 uses fixed-size keys
 
+// CertificateOp represents the high-level operation being performed
+// in certificate-related workflows. It is used to annotate errors
+// and control flow so callers can determine which CA/CSR action
+// caused an issue.
+type CertificateOp int
+
+const (
+	// CertOpCreateRootCA indicates creating a new root Certificate
+	// Authority (CA) including generating a keypair and self-signed cert.
+	CertOpCreateRootCA CertificateOp = iota
+	// CertOpLoadRootCA indicates loading an existing CA certificate
+	// and private key from PEM-encoded input.
+	CertOpLoadRootCA
+	// CertOpCreateCSRCertificate indicates generating a CSR along with
+	// a private/public keypair for a client or service certificate.
+	CertOpCreateCSRCertificate
+	// CertOpSignCSR indicates signing a PEM-encoded CSR with a CA to
+	// produce a certificate issued by the CA.
+	CertOpSignCSR
+)
+
+// CertificateError wraps errors that occur during certificate
+// operations. `Message` is a human-readable description, `Err` is the
+// underlying error being wrapped, and `Op` identifies which
+// CertificateOp was active when the error occurred.
+type CertificateError struct {
+	Message string
+	Err     error
+	Op      CertificateOp
+}
+
+// Error implements the error interface for CertificateError. The
+// returned string includes the human-readable Message and the wrapped
+// underlying error, if present.
+func (e CertificateError) Error() string {
+	if e.Err != nil {
+		return fmt.Sprintf("%s: %v", e.Message, e.Err)
+	}
+	return e.Message
+}
+
+// Unwrap allows errors.Unwrap to retrieve the underlying error.
+func (e CertificateError) Unwrap() error { return e.Err }
+
 // CertificateAuthority represents a root certificate authority (CA) with its private key and certificate.
 type CertificateAuthority struct {
 	PrivateKey  []byte
@@ -66,38 +110,38 @@ func (ca *CertificateAuthority) SignCSR(csrPem []byte, validityDays int) ([]byte
 	// Parse the CA certificate
 	caBlock, _ := pem.Decode(ca.Certificate)
 	if caBlock == nil {
-		return nil, fmt.Errorf("SignCSR: failed to decode CA certificate")
+		return nil, CertificateError{Message: "SignCSR: failed to decode CA certificate", Op: CertOpSignCSR}
 	}
 	caCert, err := x509.ParseCertificate(caBlock.Bytes)
 	if err != nil {
-		return nil, fmt.Errorf("SignCSR: failed to parse CA certificate: %w", err)
+		return nil, CertificateError{Message: "SignCSR: failed to parse CA certificate", Err: err, Op: CertOpSignCSR}
 	}
 
 	// Parse the CA private key
 	caKey, err := decodeCAPrivateKey(ca.PrivateKey)
 	if err != nil {
-		return nil, fmt.Errorf("SignCSR: failed to parse CA private key: %w", err)
+		return nil, CertificateError{Message: "SignCSR: failed to parse CA private key", Err: err, Op: CertOpSignCSR}
 	}
 
 	// Parse the CSR
 	csrBlock, _ := pem.Decode(csrPem)
 	if csrBlock == nil {
-		return nil, fmt.Errorf("SignCSR: failed to decode CSR")
+		return nil, CertificateError{Message: "SignCSR: failed to decode CSR", Op: CertOpSignCSR}
 	}
 	csr, err := x509.ParseCertificateRequest(csrBlock.Bytes)
 	if err != nil {
-		return nil, fmt.Errorf("SignCSR: failed to parse CSR: %w", err)
+		return nil, CertificateError{Message: "SignCSR: failed to parse CSR", Err: err, Op: CertOpSignCSR}
 	}
 
 	// Check CSR signature
 	if err := csr.CheckSignature(); err != nil {
-		return nil, fmt.Errorf("SignCSR: CSR signature check failed: %w", err)
+		return nil, CertificateError{Message: "SignCSR: CSR signature check failed", Err: err, Op: CertOpSignCSR}
 	}
 
 	// Prepare certificate template
 	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
-		return nil, fmt.Errorf("SignCSR: failed to generate serial number: %w", err)
+		return nil, CertificateError{Message: "SignCSR: failed to generate serial number", Err: err, Op: CertOpSignCSR}
 	}
 
 	notBefore := time.Now()
@@ -117,7 +161,7 @@ func (ca *CertificateAuthority) SignCSR(csrPem []byte, validityDays int) ([]byte
 	// Sign the certificate
 	certBytes, err := x509.CreateCertificate(rand.Reader, template, caCert, csr.PublicKey, caKey)
 	if err != nil {
-		return nil, fmt.Errorf("SignCSR: failed to sign certificate: %w", err)
+		return nil, CertificateError{Message: "SignCSR: failed to sign certificate", Err: err, Op: CertOpSignCSR}
 	}
 
 	// Encode to PEM
@@ -145,16 +189,13 @@ func (c *Config) Validate() error {
 func CreateRootCA(config Config) (CertificateAuthority, error) {
 	// Validate configuration
 	if err := config.Validate(); err != nil {
-		return CertificateAuthority{}, fmt.Errorf("CreateRootCA: %w", err)
+		return CertificateAuthority{}, CertificateError{Message: "CreateRootCA: configuration validation failed", Err: err, Op: CertOpCreateRootCA}
 	}
 
 	// Generate a random serial number for the certificate
 	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
-		return CertificateAuthority{}, fmt.Errorf(
-			"CreateRootCA: failed to generate serial number: %w",
-			err,
-		)
+		return CertificateAuthority{}, CertificateError{Message: "CreateRootCA: failed to generate serial number", Err: err, Op: CertOpCreateRootCA}
 	}
 
 	ca := buildCertificateInfo(config, serialNumber)
@@ -162,34 +203,25 @@ func CreateRootCA(config Config) (CertificateAuthority, error) {
 	// Generate Ed25519 private key
 	pub, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		return CertificateAuthority{}, fmt.Errorf(
-			"CreateRootCA: failed to generate private key: %w", err,
-		)
+		return CertificateAuthority{}, CertificateError{Message: "CreateRootCA: failed to generate private key", Err: err, Op: CertOpCreateRootCA}
 	}
 
 	// Create the certificate
 	caBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, pub, privateKey)
 	if err != nil {
-		return CertificateAuthority{}, fmt.Errorf(
-			"CreateRootCA: failed to generate certificate: %w",
-			err,
-		)
+		return CertificateAuthority{}, CertificateError{Message: "CreateRootCA: failed to generate certificate", Err: err, Op: CertOpCreateRootCA}
 	}
 
 	// Encode certificate to PEM format
 	caPem, err := encodePEM(pemTypeCertificate, caBytes)
 	if err != nil {
-		return CertificateAuthority{}, fmt.Errorf(
-			"CreateRootCA: %w", err,
-		)
+		return CertificateAuthority{}, CertificateError{Message: "CreateRootCA: failed to encode certificate to PEM", Err: err, Op: CertOpCreateRootCA}
 	}
 
 	// Encode private key to PEM format (use PKCS#8)
 	privateKeyPem, err := encodePrivateKeyPEM(privateKey)
 	if err != nil {
-		return CertificateAuthority{}, fmt.Errorf(
-			"CreateRootCA: %w", err,
-		)
+		return CertificateAuthority{}, CertificateError{Message: "CreateRootCA: failed to encode private key to PEM", Err: err, Op: CertOpCreateRootCA}
 	}
 
 	return CertificateAuthority{
@@ -205,23 +237,23 @@ func LoadRootCA(caPem, keyPem []byte) (CertificateAuthority, error) {
 	// Validate CA certificate
 	ca, err := decodeCAPem(caPem)
 	if err != nil {
-		return CertificateAuthority{}, fmt.Errorf("LoadRootCA: %w", err)
+		return CertificateAuthority{}, CertificateError{Message: "LoadRootCA: failed to decode CA certificate", Err: err, Op: CertOpLoadRootCA}
 	}
 	if !ca.IsCA {
-		return CertificateAuthority{}, fmt.Errorf("LoadRootCA: provided certificate is not a CA")
+		return CertificateAuthority{}, CertificateError{Message: "LoadRootCA: provided certificate is not a CA", Op: CertOpLoadRootCA}
 	}
 	// Validate CA private key
 	privKey, err := decodeCAPrivateKey(keyPem)
 	if err != nil {
-		return CertificateAuthority{}, fmt.Errorf("LoadRootCA: %w", err)
+		return CertificateAuthority{}, CertificateError{Message: "LoadRootCA: failed to parse CA private key", Err: err, Op: CertOpLoadRootCA}
 	}
 	// Ensure the private key matches the CA certificate's public key
 	if err := verifyKeyMatchesCert(privKey, ca); err != nil {
-		return CertificateAuthority{}, fmt.Errorf("LoadRootCA: %w", err)
+		return CertificateAuthority{}, CertificateError{Message: "LoadRootCA: private key does not match certificate public key", Err: err, Op: CertOpLoadRootCA}
 	}
 	// Ensure the time validity of the CA certificate is still valid
 	if time.Now().Before(ca.NotBefore) || time.Now().After(ca.NotAfter) {
-		return CertificateAuthority{}, fmt.Errorf("LoadRootCA: CA certificate is not currently valid")
+		return CertificateAuthority{}, CertificateError{Message: "LoadRootCA: CA certificate is not currently valid", Op: CertOpLoadRootCA}
 	}
 
 	return CertificateAuthority{
@@ -239,41 +271,29 @@ func CreateCSRCertificate(config Config) (CSRCertificate, error) {
 	// generate Ed25519 key for CSR
 	pub, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
-		return CSRCertificate{}, fmt.Errorf(
-			"CreateCSRCertificate: error generating CSR private key: %w",
-			err,
-		)
+		return CSRCertificate{}, CertificateError{Message: "CreateCSRCertificate: error generating CSR private key", Err: err, Op: CertOpCreateCSRCertificate}
 	}
 	csrBytes, err := x509.CreateCertificateRequest(rand.Reader, &csr, privateKey)
 	if err != nil {
-		return CSRCertificate{}, fmt.Errorf(
-			"CreateCSRCertificate: error creating CSR: %w",
-			err,
-		)
+		return CSRCertificate{}, CertificateError{Message: "CreateCSRCertificate: error creating CSR", Err: err, Op: CertOpCreateCSRCertificate}
 	}
 
 	// Encode CSR to PEM format
 	csrPem, err := encodePEM(pemTypeCertRequest, csrBytes)
 	if err != nil {
-		return CSRCertificate{}, fmt.Errorf(
-			"CreateCSRCertificate: %w", err,
-		)
+		return CSRCertificate{}, CertificateError{Message: "CreateCSRCertificate: failed to encode CSR to PEM", Err: err, Op: CertOpCreateCSRCertificate}
 	}
 
 	// Encode private key to PEM format
 	privateKeyPem, err := encodePrivateKeyPEM(privateKey)
 	if err != nil {
-		return CSRCertificate{}, fmt.Errorf(
-			"CreateCSRCertificate: %w", err,
-		)
+		return CSRCertificate{}, CertificateError{Message: "CreateCSRCertificate: failed to encode private key to PEM", Err: err, Op: CertOpCreateCSRCertificate}
 	}
 
 	// Encode public key to PEM format
 	publicKeyPem, err := encodePublicKeyPEM(pub)
 	if err != nil {
-		return CSRCertificate{}, fmt.Errorf(
-			"CreateCSRCertificate: %w", err,
-		)
+		return CSRCertificate{}, CertificateError{Message: "CreateCSRCertificate: failed to encode public key to PEM", Err: err, Op: CertOpCreateCSRCertificate}
 	}
 
 	return CSRCertificate{
@@ -330,11 +350,11 @@ func encodePublicKeyPEM(publicKey interface{}) ([]byte, error) {
 func decodeCAPem(caPem []byte) (*x509.Certificate, error) {
 	caBlock, _ := pem.Decode(caPem)
 	if caBlock == nil {
-		return &x509.Certificate{}, fmt.Errorf("LoadRootCA: failed to decode CA certificate")
+		return &x509.Certificate{}, fmt.Errorf("failed to decode CA certificate")
 	}
 	ca, err := x509.ParseCertificate(caBlock.Bytes)
 	if err != nil {
-		return &x509.Certificate{}, fmt.Errorf("LoadRootCA: failed to parse CA certificate: %w", err)
+		return &x509.Certificate{}, fmt.Errorf("failed to parse CA certificate: %w", err)
 	}
 	return ca, nil
 }
@@ -342,12 +362,12 @@ func decodeCAPem(caPem []byte) (*x509.Certificate, error) {
 func decodeCAPrivateKey(keyPem []byte) (interface{}, error) {
 	keyBlock, _ := pem.Decode(keyPem)
 	if keyBlock == nil {
-		return nil, fmt.Errorf("LoadRootCA: failed to decode CA private key")
+		return nil, fmt.Errorf("failed to decode CA private key")
 	}
 
 	// Reject encrypted PEM blocks (not supported). Avoid deprecated IsEncryptedPEMBlock.
 	if keyBlock.Type == pemTypeEncryptedPrivateKey {
-		return nil, fmt.Errorf("LoadRootCA: encrypted private keys are not supported")
+		return nil, fmt.Errorf("encrypted private keys are not supported")
 	}
 
 	switch keyBlock.Type {
@@ -355,23 +375,23 @@ func decodeCAPrivateKey(keyPem []byte) (interface{}, error) {
 		// legacy PKCS#1 RSA private key
 		privKey, err := x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
 		if err != nil {
-			return nil, fmt.Errorf("LoadRootCA: failed to parse PKCS1 private key: %w", err)
+			return nil, fmt.Errorf("failed to parse PKCS1 private key: %w", err)
 		}
 		return privKey, nil
 	case pemTypePrivateKey:
 		k, err := x509.ParsePKCS8PrivateKey(keyBlock.Bytes)
 		if err != nil {
-			return nil, fmt.Errorf("LoadRootCA: failed to parse PKCS8 private key: %w", err)
+			return nil, fmt.Errorf("failed to parse PKCS8 private key: %w", err)
 		}
 		return k, nil
 	case pemTypeECPrivateKey:
 		k, err := x509.ParseECPrivateKey(keyBlock.Bytes)
 		if err != nil {
-			return nil, fmt.Errorf("LoadRootCA: failed to parse EC private key: %w", err)
+			return nil, fmt.Errorf("failed to parse EC private key: %w", err)
 		}
 		return k, nil
 	default:
-		return nil, fmt.Errorf("LoadRootCA: unsupported private key type: %s", keyBlock.Type)
+		return nil, fmt.Errorf("unsupported private key type: %s", keyBlock.Type)
 	}
 }
 
