@@ -8,7 +8,8 @@ fi
 
 FAILED=0
 
-MODULE_DIRS=$(find . -name "go.mod" -not -path "*/vendor/*" -exec dirname {} \; | sort)
+# Find module directories but exclude vendor and the website directory (website built separately)
+MODULE_DIRS=$(find . -name "go.mod" -not -path "*/vendor/*" -not -path "./website/*" -exec dirname {} \; | sort)
 
 for DIR in $MODULE_DIRS; do
   # Run the command in a subshell so we don't need to 'cd ..' back
