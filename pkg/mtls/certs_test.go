@@ -1,6 +1,7 @@
 package mtls
 
 import (
+	"bytes"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
@@ -1076,5 +1077,33 @@ func TestCSRCertificatePublicKeyPEMEndsWithArmor(t *testing.T) {
 
 	if !strings.HasSuffix(pemStr, expectedEnd) {
 		t.Errorf("Public key PEM should end with '%s', got: ...%.50s", expectedEnd, pemStr)
+	}
+}
+
+func TestLoadRootCA(t *testing.T) {
+	// First, create a valid Root CA to get its PEM data
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+	ca, err := CreateRootCA(config)
+	if err != nil {
+		t.Fatalf("CreateRootCA failed: %v", err)
+	}
+
+	// Now load the Root CA from the PEM data
+	loadedCA, err := LoadRootCA(ca.Certificate, ca.PrivateKey)
+	if err != nil {
+		t.Fatalf("LoadRootCA failed: %v", err)
+	}
+
+	// Verify loaded certificate matches original
+	if !bytes.Equal(loadedCA.Certificate, ca.Certificate) {
+		t.Error("Loaded certificate does not match original")
+	}
+
+	// Verify loaded private key matches original
+	if !bytes.Equal(loadedCA.PrivateKey, ca.PrivateKey) {
+		t.Error("Loaded private key does not match original")
 	}
 }
