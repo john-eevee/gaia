@@ -14,6 +14,17 @@ import (
 	"time"
 )
 
+// PEM block type constants
+const (
+	pemTypeCertificate         = "CERTIFICATE"
+	pemTypePrivateKey          = "PRIVATE KEY"
+	pemTypeRSAPrivateKey       = "RSA PRIVATE KEY"
+	pemTypeECPrivateKey        = "EC PRIVATE KEY"
+	pemTypeEncryptedPrivateKey = "ENCRYPTED PRIVATE KEY"
+	pemTypeCertRequest         = "CERTIFICATE REQUEST"
+	pemTypePublicKey           = "PUBLIC KEY"
+)
+
 // RootCAValidityYears defines the validity period for Root CA certificates
 const RootCAValidityYears = 10
 
@@ -111,7 +122,7 @@ func (ca *CertificateAuthority) SignCSR(csrPem []byte, validityDays int) ([]byte
 	}
 
 	// Encode to PEM
-	return encodePEM("CERTIFICATE", certBytes)
+	return encodePEM(pemTypeCertificate, certBytes)
 }
 
 // ============================================================================
@@ -168,7 +179,7 @@ func CreateRootCA(config Config) (CertificateAuthority, error) {
 	}
 
 	// Encode certificate to PEM format
-	caPem, err := encodePEM("CERTIFICATE", caBytes)
+	caPem, err := encodePEM(pemTypeCertificate, caBytes)
 	if err != nil {
 		return CertificateAuthority{}, fmt.Errorf(
 			"CreateRootCA: %w", err,
@@ -243,7 +254,7 @@ func CreateCSRCertificate(config Config) (CSRCertificate, error) {
 	}
 
 	// Encode CSR to PEM format
-	csrPem, err := encodePEM("CERTIFICATE REQUEST", csrBytes)
+	csrPem, err := encodePEM(pemTypeCertRequest, csrBytes)
 	if err != nil {
 		return CSRCertificate{}, fmt.Errorf(
 			"CreateCSRCertificate: %w", err,
@@ -305,7 +316,7 @@ func encodePrivateKeyPEM(privateKey interface{}) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal private key to PKCS#8: %w", err)
 	}
-	return encodePEM("PRIVATE KEY", pkcs8Bytes)
+	return encodePEM(pemTypePrivateKey, pkcs8Bytes)
 }
 
 // encodePublicKeyPEM encodes an RSA public key to PEM format
@@ -314,7 +325,7 @@ func encodePublicKeyPEM(publicKey *rsa.PublicKey) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal public key: %w", err)
 	}
-	return encodePEM("PUBLIC KEY", publicKeyBytes)
+	return encodePEM(pemTypePublicKey, publicKeyBytes)
 }
 
 func decodeCAPem(caPem []byte) (*x509.Certificate, error) {
@@ -336,24 +347,24 @@ func decodeCAPrivateKey(keyPem []byte) (interface{}, error) {
 	}
 
 	// Reject encrypted PEM blocks (not supported). Avoid deprecated IsEncryptedPEMBlock.
-	if keyBlock.Type == "ENCRYPTED PRIVATE KEY" {
+	if keyBlock.Type == pemTypeEncryptedPrivateKey {
 		return nil, fmt.Errorf("LoadRootCA: encrypted private keys are not supported")
 	}
 
 	switch keyBlock.Type {
-	case "RSA PRIVATE KEY":
+	case pemTypeRSAPrivateKey:
 		privKey, err := x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
 		if err != nil {
 			return nil, fmt.Errorf("LoadRootCA: failed to parse PKCS1 private key: %w", err)
 		}
 		return privKey, nil
-	case "PRIVATE KEY":
+	case pemTypePrivateKey:
 		k, err := x509.ParsePKCS8PrivateKey(keyBlock.Bytes)
 		if err != nil {
 			return nil, fmt.Errorf("LoadRootCA: failed to parse PKCS8 private key: %w", err)
 		}
 		return k, nil
-	case "EC PRIVATE KEY":
+	case pemTypeECPrivateKey:
 		k, err := x509.ParseECPrivateKey(keyBlock.Bytes)
 		if err != nil {
 			return nil, fmt.Errorf("LoadRootCA: failed to parse EC private key: %w", err)

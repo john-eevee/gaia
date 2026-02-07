@@ -44,7 +44,7 @@ func TestLoadRootCA_PKCS1(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected RSA private key from PKCS#8")
 	}
-	pkcs1 := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(rsaKey)})
+	pkcs1 := pem.EncodeToMemory(&pem.Block{Type: pemTypeRSAPrivateKey, Bytes: x509.MarshalPKCS1PrivateKey(rsaKey)})
 	if _, err := LoadRootCA(ca.Certificate, pkcs1); err != nil {
 		t.Fatalf("LoadRootCA failed for PKCS#1 key: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestLoadRootCA_EC(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateCertificate EC: %v", err)
 	}
-	certPem := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certBytes})
+	certPem := pem.EncodeToMemory(&pem.Block{Type: pemTypeCertificate, Bytes: certBytes})
 	keyPem, err := encodePrivateKeyPEM(priv)
 	if err != nil {
 		t.Fatalf("encodePrivateKeyPEM EC: %v", err)
@@ -106,7 +106,7 @@ func TestLoadRootCA_EncryptedKeyRejected(t *testing.T) {
 	if block == nil {
 		t.Fatalf("failed to decode created CA private key PEM")
 	}
-	encryptedBlock := &pem.Block{Type: "ENCRYPTED PRIVATE KEY", Bytes: block.Bytes}
+	encryptedBlock := &pem.Block{Type: pemTypeEncryptedPrivateKey, Bytes: block.Bytes}
 	encryptedPem := pem.EncodeToMemory(encryptedBlock)
 	if _, err := LoadRootCA(ca.Certificate, encryptedPem); err == nil {
 		t.Fatalf("expected LoadRootCA to reject encrypted key, but it succeeded")
