@@ -2,22 +2,34 @@ package mtls
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
 )
 
+// PEM block type constants
+const (
+	pemTypeCertificate         = "CERTIFICATE"
+	pemTypePrivateKey          = "PRIVATE KEY"
+	pemTypeRSAPrivateKey       = "RSA PRIVATE KEY"
+	pemTypeECPrivateKey        = "EC PRIVATE KEY"
+	pemTypeEncryptedPrivateKey = "ENCRYPTED PRIVATE KEY"
+	pemTypeCertRequest         = "CERTIFICATE REQUEST"
+	pemTypePublicKey           = "PUBLIC KEY"
+)
+
 // RootCAValidityYears defines the validity period for Root CA certificates
 const RootCAValidityYears = 10
 
-// rsaKeySize defines the RSA key size for certificate generation (4096 for production, 2048 for tests)
-// This can be overridden using build tags for testing purposes
-var rsaKeySize = 4096
+// (previously RSA) key size removed — Ed25519 uses fixed-size keys
 
 // CertificateAuthority represents a root certificate authority (CA) with its private key and certificate.
 type CertificateAuthority struct {
@@ -62,11 +74,7 @@ func (ca *CertificateAuthority) SignCSR(csrPem []byte, validityDays int) ([]byte
 	}
 
 	// Parse the CA private key
-	keyBlock, _ := pem.Decode(ca.PrivateKey)
-	if keyBlock == nil {
-		return nil, fmt.Errorf("SignCSR: failed to decode CA private key")
-	}
-	caKey, err := x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
+	caKey, err := decodeCAPrivateKey(ca.PrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("SignCSR: failed to parse CA private key: %w", err)
 	}
@@ -113,7 +121,7 @@ func (ca *CertificateAuthority) SignCSR(csrPem []byte, validityDays int) ([]byte
 	}
 
 	// Encode to PEM
-	return encodePEM("CERTIFICATE", certBytes)
+	return encodePEM(pemTypeCertificate, certBytes)
 }
 
 // ============================================================================
@@ -151,17 +159,16 @@ func CreateRootCA(config Config) (CertificateAuthority, error) {
 
 	ca := buildCertificateInfo(config, serialNumber)
 
-	// Generate RSA private key
-	privateKey, err := rsa.GenerateKey(rand.Reader, rsaKeySize)
+	// Generate Ed25519 private key
+	pub, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return CertificateAuthority{}, fmt.Errorf(
-			"CreateRootCA: failed to generate private key: %w",
-			err,
+			"CreateRootCA: failed to generate private key: %w", err,
 		)
 	}
 
 	// Create the certificate
-	caBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, &privateKey.PublicKey, privateKey)
+	caBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, pub, privateKey)
 	if err != nil {
 		return CertificateAuthority{}, fmt.Errorf(
 			"CreateRootCA: failed to generate certificate: %w",
@@ -170,14 +177,14 @@ func CreateRootCA(config Config) (CertificateAuthority, error) {
 	}
 
 	// Encode certificate to PEM format
-	caPem, err := encodePEM("CERTIFICATE", caBytes)
+	caPem, err := encodePEM(pemTypeCertificate, caBytes)
 	if err != nil {
 		return CertificateAuthority{}, fmt.Errorf(
 			"CreateRootCA: %w", err,
 		)
 	}
 
-	// Encode private key to PEM format
+	// Encode private key to PEM format (use PKCS#8)
 	privateKeyPem, err := encodePrivateKeyPEM(privateKey)
 	if err != nil {
 		return CertificateAuthority{}, fmt.Errorf(
@@ -191,13 +198,46 @@ func CreateRootCA(config Config) (CertificateAuthority, error) {
 	}, nil
 }
 
+// LoadRootCA loads an existing root CA certificate and private key from PEM-encoded data.
+// It assumes the provided PEM data is valid and properly formatted.
+// This function is useful for loading a pre-generated CA from storage or configuration.
+func LoadRootCA(caPem, keyPem []byte) (CertificateAuthority, error) {
+	// Validate CA certificate
+	ca, err := decodeCAPem(caPem)
+	if err != nil {
+		return CertificateAuthority{}, fmt.Errorf("LoadRootCA: %w", err)
+	}
+	if !ca.IsCA {
+		return CertificateAuthority{}, fmt.Errorf("LoadRootCA: provided certificate is not a CA")
+	}
+	// Validate CA private key
+	privKey, err := decodeCAPrivateKey(keyPem)
+	if err != nil {
+		return CertificateAuthority{}, fmt.Errorf("LoadRootCA: %w", err)
+	}
+	// Ensure the private key matches the CA certificate's public key
+	if err := verifyKeyMatchesCert(privKey, ca); err != nil {
+		return CertificateAuthority{}, fmt.Errorf("LoadRootCA: %w", err)
+	}
+	// Ensure the time validity of the CA certificate is still valid
+	if time.Now().Before(ca.NotBefore) || time.Now().After(ca.NotAfter) {
+		return CertificateAuthority{}, fmt.Errorf("LoadRootCA: CA certificate is not currently valid")
+	}
+
+	return CertificateAuthority{
+		Certificate: caPem,
+		PrivateKey:  keyPem,
+	}, nil
+}
+
 // CreateCSRCertificate creates a certificate signing request (CSR) with associated
 // private and public keys for use in certificate provisioning workflows.
 func CreateCSRCertificate(config Config) (CSRCertificate, error) {
 	csr := x509.CertificateRequest{
 		Subject: config.toPKI(),
 	}
-	privateKey, err := rsa.GenerateKey(rand.Reader, rsaKeySize)
+	// generate Ed25519 key for CSR
+	pub, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return CSRCertificate{}, fmt.Errorf(
 			"CreateCSRCertificate: error generating CSR private key: %w",
@@ -213,7 +253,7 @@ func CreateCSRCertificate(config Config) (CSRCertificate, error) {
 	}
 
 	// Encode CSR to PEM format
-	csrPem, err := encodePEM("CERTIFICATE REQUEST", csrBytes)
+	csrPem, err := encodePEM(pemTypeCertRequest, csrBytes)
 	if err != nil {
 		return CSRCertificate{}, fmt.Errorf(
 			"CreateCSRCertificate: %w", err,
@@ -229,7 +269,7 @@ func CreateCSRCertificate(config Config) (CSRCertificate, error) {
 	}
 
 	// Encode public key to PEM format
-	publicKeyPem, err := encodePublicKeyPEM(&privateKey.PublicKey)
+	publicKeyPem, err := encodePublicKeyPEM(pub)
 	if err != nil {
 		return CSRCertificate{}, fmt.Errorf(
 			"CreateCSRCertificate: %w", err,
@@ -242,10 +282,6 @@ func CreateCSRCertificate(config Config) (CSRCertificate, error) {
 		PublicKey:  publicKeyPem,
 	}, nil
 }
-
-// ============================================================================
-// Private Helper Functions
-// ============================================================================
 
 // toPKI converts a Config to a pkix.Name for use in certificate subject fields
 func (config Config) toPKI() pkix.Name {
@@ -273,18 +309,107 @@ func encodePEM(pemType string, data []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// encodePrivateKeyPEM encodes an RSA private key to PEM format
-func encodePrivateKeyPEM(privateKey *rsa.PrivateKey) ([]byte, error) {
-	return encodePEM("RSA PRIVATE KEY", x509.MarshalPKCS1PrivateKey(privateKey))
+// encodePrivateKeyPEM encodes a private key to PEM format using PKCS#8
+func encodePrivateKeyPEM(privateKey interface{}) ([]byte, error) {
+	pkcs8Bytes, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal private key to PKCS#8: %w", err)
+	}
+	return encodePEM(pemTypePrivateKey, pkcs8Bytes)
 }
 
-// encodePublicKeyPEM encodes an RSA public key to PEM format
-func encodePublicKeyPEM(publicKey *rsa.PublicKey) ([]byte, error) {
+// encodePublicKeyPEM encodes a public key (RSA, ECDSA, Ed25519, etc) to PEM format
+func encodePublicKeyPEM(publicKey interface{}) ([]byte, error) {
 	publicKeyBytes, err := x509.MarshalPKIXPublicKey(publicKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal public key: %w", err)
 	}
-	return encodePEM("PUBLIC KEY", publicKeyBytes)
+	return encodePEM(pemTypePublicKey, publicKeyBytes)
+}
+
+func decodeCAPem(caPem []byte) (*x509.Certificate, error) {
+	caBlock, _ := pem.Decode(caPem)
+	if caBlock == nil {
+		return &x509.Certificate{}, fmt.Errorf("LoadRootCA: failed to decode CA certificate")
+	}
+	ca, err := x509.ParseCertificate(caBlock.Bytes)
+	if err != nil {
+		return &x509.Certificate{}, fmt.Errorf("LoadRootCA: failed to parse CA certificate: %w", err)
+	}
+	return ca, nil
+}
+
+func decodeCAPrivateKey(keyPem []byte) (interface{}, error) {
+	keyBlock, _ := pem.Decode(keyPem)
+	if keyBlock == nil {
+		return nil, fmt.Errorf("LoadRootCA: failed to decode CA private key")
+	}
+
+	// Reject encrypted PEM blocks (not supported). Avoid deprecated IsEncryptedPEMBlock.
+	if keyBlock.Type == pemTypeEncryptedPrivateKey {
+		return nil, fmt.Errorf("LoadRootCA: encrypted private keys are not supported")
+	}
+
+	switch keyBlock.Type {
+	case pemTypeRSAPrivateKey:
+		// legacy PKCS#1 RSA private key
+		privKey, err := x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("LoadRootCA: failed to parse PKCS1 private key: %w", err)
+		}
+		return privKey, nil
+	case pemTypePrivateKey:
+		k, err := x509.ParsePKCS8PrivateKey(keyBlock.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("LoadRootCA: failed to parse PKCS8 private key: %w", err)
+		}
+		return k, nil
+	case pemTypeECPrivateKey:
+		k, err := x509.ParseECPrivateKey(keyBlock.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("LoadRootCA: failed to parse EC private key: %w", err)
+		}
+		return k, nil
+	default:
+		return nil, fmt.Errorf("LoadRootCA: unsupported private key type: %s", keyBlock.Type)
+	}
+}
+
+// verifyKeyMatchesCert checks the private key corresponds to the certificate's public key
+func verifyKeyMatchesCert(key interface{}, cert *x509.Certificate) error {
+	switch k := key.(type) {
+	case *rsa.PrivateKey:
+		pub, ok := cert.PublicKey.(*rsa.PublicKey)
+		if !ok {
+			return errors.New("certificate public key is not RSA")
+		}
+		// rsa.PrivateKey embeds PublicKey; compare promoted fields directly.
+		if k.N.Cmp(pub.N) != 0 || k.E != pub.E {
+			return errors.New("rsa public key mismatch")
+		}
+		return nil
+	case *ecdsa.PrivateKey:
+		pub, ok := cert.PublicKey.(*ecdsa.PublicKey)
+		if !ok {
+			return errors.New("certificate public key is not ECDSA")
+		}
+		// ecdsa.PrivateKey embeds PublicKey; compare promoted fields directly.
+		if k.X.Cmp(pub.X) != 0 || k.Y.Cmp(pub.Y) != 0 {
+			return errors.New("ecdsa public key mismatch")
+		}
+		return nil
+	case ed25519.PrivateKey:
+		pub, ok := cert.PublicKey.(ed25519.PublicKey)
+		if !ok {
+			return errors.New("certificate public key is not Ed25519")
+		}
+		if !bytes.Equal(k.Public().(ed25519.PublicKey), pub) {
+			return errors.New("ed25519 public key mismatch")
+		}
+		return nil
+	default:
+		return errors.New("unsupported private key type")
+	}
 }
 
 // buildCertificateInfo constructs a certificate with the given config and serial number

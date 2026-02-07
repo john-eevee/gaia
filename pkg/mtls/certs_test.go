@@ -1,7 +1,8 @@
 package mtls
 
 import (
-	"crypto/rsa"
+	"bytes"
+	"crypto/ed25519"
 	"crypto/x509"
 	"encoding/pem"
 	"math/big"
@@ -9,12 +10,6 @@ import (
 	"testing"
 	"time"
 )
-
-// Override rsaKeySize to 2048 for faster tests (400%+ speedup)
-// Production code uses 4096, tests use 2048 which is still cryptographically valid
-func init() {
-	rsaKeySize = 2048
-}
 
 // TestCreateRootCASuccess tests successful Root CA creation with valid config
 func TestCreateRootCASuccess(t *testing.T) {
@@ -355,14 +350,18 @@ func TestCreateRootCAPrivateKeyPEMFormat(t *testing.T) {
 		t.Fatal("Private key is not valid PEM format")
 	}
 
-	if block.Type != "RSA PRIVATE KEY" {
-		t.Errorf("PEM block type should be 'RSA PRIVATE KEY', got '%s'", block.Type)
+	if block.Type != pemTypePrivateKey {
+		t.Errorf("PEM block type should be '%s', got '%s'", pemTypePrivateKey, block.Type)
 	}
 
-	// Verify it can be parsed as a valid RSA private key
-	_, err = x509.ParsePKCS1PrivateKey(block.Bytes)
+	// Verify it can be parsed as a valid PKCS#8 private key
+	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {
-		t.Errorf("Failed to parse private key: %v", err)
+		t.Errorf("Failed to parse private key (PKCS#8): %v", err)
+	}
+	// Expect Ed25519 key by default
+	if _, ok := parsed.(ed25519.PrivateKey); !ok {
+		t.Errorf("Expected Ed25519 private key, got %T", parsed)
 	}
 }
 
@@ -590,14 +589,17 @@ func TestCreateCSRCertificatePrivateKeyFormat(t *testing.T) {
 		t.Fatal("Private key is not valid PEM format")
 	}
 
-	if block.Type != "RSA PRIVATE KEY" {
-		t.Errorf("PEM block type should be 'RSA PRIVATE KEY', got '%s'", block.Type)
+	if block.Type != pemTypePrivateKey {
+		t.Errorf("PEM block type should be '%s', got '%s'", pemTypePrivateKey, block.Type)
 	}
 
-	// Verify it can be parsed as a valid RSA private key
-	_, err = x509.ParsePKCS1PrivateKey(block.Bytes)
+	// Verify it can be parsed as a valid PKCS#8 private key
+	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {
-		t.Errorf("Failed to parse private key: %v", err)
+		t.Errorf("Failed to parse private key (PKCS#8): %v", err)
+	}
+	if _, ok := parsed.(ed25519.PrivateKey); !ok {
+		t.Errorf("Expected Ed25519 private key, got %T", parsed)
 	}
 }
 
@@ -642,32 +644,32 @@ func TestCreateCSRCertificateKeyPairConsistency(t *testing.T) {
 		t.Fatalf("CreateCSRCertificate failed: %v", err)
 	}
 
-	// Parse private key
+	// Parse private key (PKCS#8 for Ed25519)
 	privKeyBlock, _ := pem.Decode(csr.PrivateKey)
-	privKey, err := x509.ParsePKCS1PrivateKey(privKeyBlock.Bytes)
+	privKeyIntf, err := x509.ParsePKCS8PrivateKey(privKeyBlock.Bytes)
 	if err != nil {
 		t.Fatalf("Failed to parse private key: %v", err)
+	}
+	privKey, ok := privKeyIntf.(ed25519.PrivateKey)
+	if !ok {
+		t.Fatalf("expected Ed25519 private key, got %T", privKeyIntf)
 	}
 
 	// Parse public key
 	pubKeyBlock, _ := pem.Decode(csr.PublicKey)
-	pubKey, err := x509.ParsePKIXPublicKey(pubKeyBlock.Bytes)
+	pubKeyIntf, err := x509.ParsePKIXPublicKey(pubKeyBlock.Bytes)
 	if err != nil {
 		t.Fatalf("Failed to parse public key: %v", err)
 	}
-
-	// Verify they form a valid pair
-	rsaPubKey, ok := pubKey.(*rsa.PublicKey)
+	pubKey, ok := pubKeyIntf.(ed25519.PublicKey)
 	if !ok {
-		t.Fatal("Public key is not an RSA public key")
+		t.Fatal("Public key is not an Ed25519 public key")
 	}
 
-	// Check that the public components match
-	if privKey.N.Cmp(rsaPubKey.N) != 0 {
-		t.Error("Public key modulus mismatch between private and public keys")
-	}
-	if privKey.E != rsaPubKey.E {
-		t.Error("Public key exponent mismatch between private and public keys")
+	// Verify they form a valid pair (compare derived public key from private)
+	derivedPub := privKey.Public().(ed25519.PublicKey)
+	if !bytes.Equal(derivedPub, pubKey) {
+		t.Error("Public key mismatch between private and public keys")
 	}
 }
 
@@ -831,7 +833,7 @@ func TestRootCAPrivateKeyPEMArmor(t *testing.T) {
 		t.Fatalf("CreateRootCA failed: %v", err)
 	}
 
-	verifyPEMArmor(t, ca.PrivateKey, "RSA PRIVATE KEY")
+	verifyPEMArmor(t, ca.PrivateKey, pemTypePrivateKey)
 }
 
 // TestCSRCertificateCSRPEMArmor tests that CSR has proper PEM armor lines
@@ -861,7 +863,7 @@ func TestCSRCertificatePrivateKeyPEMArmor(t *testing.T) {
 		t.Fatalf("CreateCSRCertificate failed: %v", err)
 	}
 
-	verifyPEMArmor(t, csr.PrivateKey, "RSA PRIVATE KEY")
+	verifyPEMArmor(t, csr.PrivateKey, pemTypePrivateKey)
 }
 
 // TestCSRCertificatePublicKeyPEMArmor tests that CSR public key has proper PEM armor lines
@@ -932,7 +934,7 @@ func TestRootCAPrivateKeyPEMStartsWithArmor(t *testing.T) {
 	}
 
 	pemStr := strings.TrimSpace(string(ca.PrivateKey))
-	expectedBegin := "-----BEGIN RSA PRIVATE KEY-----"
+	expectedBegin := "-----BEGIN PRIVATE KEY-----"
 
 	if !strings.HasPrefix(pemStr, expectedBegin) {
 		t.Errorf("Private key PEM should start with '%s', got: %.50s...", expectedBegin, pemStr)
@@ -952,7 +954,7 @@ func TestRootCAPrivateKeyPEMEndsWithArmor(t *testing.T) {
 	}
 
 	pemStr := strings.TrimSpace(string(ca.PrivateKey))
-	expectedEnd := "-----END RSA PRIVATE KEY-----"
+	expectedEnd := "-----END PRIVATE KEY-----"
 
 	if !strings.HasSuffix(pemStr, expectedEnd) {
 		t.Errorf("Private key PEM should end with '%s', got: ...%.50s", expectedEnd, pemStr)
@@ -1012,7 +1014,7 @@ func TestCSRCertificatePrivateKeyPEMStartsWithArmor(t *testing.T) {
 	}
 
 	pemStr := strings.TrimSpace(string(csr.PrivateKey))
-	expectedBegin := "-----BEGIN RSA PRIVATE KEY-----"
+	expectedBegin := "-----BEGIN PRIVATE KEY-----"
 
 	if !strings.HasPrefix(pemStr, expectedBegin) {
 		t.Errorf("Private key PEM should start with '%s', got: %.50s...", expectedBegin, pemStr)
@@ -1032,7 +1034,7 @@ func TestCSRCertificatePrivateKeyPEMEndsWithArmor(t *testing.T) {
 	}
 
 	pemStr := strings.TrimSpace(string(csr.PrivateKey))
-	expectedEnd := "-----END RSA PRIVATE KEY-----"
+	expectedEnd := "-----END PRIVATE KEY-----"
 
 	if !strings.HasSuffix(pemStr, expectedEnd) {
 		t.Errorf("Private key PEM should end with '%s', got: ...%.50s", expectedEnd, pemStr)
@@ -1076,5 +1078,33 @@ func TestCSRCertificatePublicKeyPEMEndsWithArmor(t *testing.T) {
 
 	if !strings.HasSuffix(pemStr, expectedEnd) {
 		t.Errorf("Public key PEM should end with '%s', got: ...%.50s", expectedEnd, pemStr)
+	}
+}
+
+func TestLoadRootCA(t *testing.T) {
+	// First, create a valid Root CA to get its PEM data
+	config := Config{
+		Organization: "Test Org",
+		Country:      "US",
+	}
+	ca, err := CreateRootCA(config)
+	if err != nil {
+		t.Fatalf("CreateRootCA failed: %v", err)
+	}
+
+	// Now load the Root CA from the PEM data
+	loadedCA, err := LoadRootCA(ca.Certificate, ca.PrivateKey)
+	if err != nil {
+		t.Fatalf("LoadRootCA failed: %v", err)
+	}
+
+	// Verify loaded certificate matches original
+	if !bytes.Equal(loadedCA.Certificate, ca.Certificate) {
+		t.Error("Loaded certificate does not match original")
+	}
+
+	// Verify loaded private key matches original
+	if !bytes.Equal(loadedCA.PrivateKey, ca.PrivateKey) {
+		t.Error("Loaded private key does not match original")
 	}
 }
