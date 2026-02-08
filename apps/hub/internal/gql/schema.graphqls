@@ -1,8 +1,0 @@
-type Query {
-  health: Health!
-}
-
-type Health {
-  status: String!
-  version: String!
-}
