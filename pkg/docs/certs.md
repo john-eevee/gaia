@@ -33,13 +33,6 @@ Public functions
   - Signs a PEM-encoded CSR with the CA's private key and returns a PEM-encoded certificate valid for `validityDays`.
   - Validates CSR signature and uses the CSR subject for the issued certificate.
 
-Helper functions and types
---------------------------
-- `toPKI()` (Config method): converts `Config` into a `pkix.Name` used inside X.509 subjects.
-- `encodePEM`, `encodePrivateKeyPEM`, `encodePublicKeyPEM`: PEM encoding helpers. Private keys are marshalled with `x509.MarshalPKCS8PrivateKey`.
-- `decodeCAPem`, `decodeCAPrivateKey`: PEM decoding and parsing helpers. Supported private key PEM types: `PRIVATE KEY` (PKCS#8) and `EC PRIVATE KEY` (EC). Encrypted private keys are rejected.
-- `verifyKeyMatchesCert`: checks the provided private key corresponds to a certificate's public key. Supports RSA, ECDSA and Ed25519 private keys.
-
 Error handling pattern
 ----------------------
 Errors are returned as `CertificateError` which wraps inner errors and annotates the high-level operation via `Op` (CertificateOp). The `Error()` implementation concatenates the message with the wrapped error message if present.
@@ -63,15 +56,5 @@ csrcfg := mtls.Config{Organization: "Acme", Country: "US", CommonName: "device1"
 csr, err := mtls.CreateCSRCertificate(csrcfg)
 certPem, err := ca.SignCSR(csr.CSR, 365)
 ```
-
-Where to look next
-------------------
-- `pkg/mtls` package tests (if present) to see usage patterns.
-- Other code that consumes `CertificateAuthority` or CSRs (apps/hub, apps/farm) to understand integration and mTLS setup.
-
-Maintenance
------------
-- If you need to accept PKCS#1 RSA private keys for backward compatibility, add parsing in `decodeCAPrivateKey` and update `pemTypeRSAPrivateKey` usage with clear migration notes.
-- Consider adding unit tests for edge cases: invalid PEM, encrypted PEM, mismatched key/cert, expired CA.
 
 File reference: `pkg/mtls/certs.go`
