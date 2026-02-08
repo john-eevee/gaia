@@ -1,20 +1,21 @@
-name: Co-op Hub CI
+name: Farm CI
 
 on:
   push:
     branches: ["main"]
     paths:
-      - "apps/hub/**"
+      - "apps/farm/**"
       - "pkg/**"
       - "go.work"
   pull_request:
     paths:
-      - "apps/hub/**"
+      - "apps/farm/**"
       - "pkg/**"
       - "go.work"
 
 jobs:
+  # Call the reusable workflow
   ci-pipeline:
     uses: ./.github/workflows/go.jobs.yml
     with:
-      app_dir: "apps/hub"
+      app_dir: "apps/farm"

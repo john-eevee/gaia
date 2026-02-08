@@ -1,21 +1,20 @@
-name: Farm Node CI
+name: Hub CI
 
 on:
   push:
     branches: ["main"]
     paths:
-      - "apps/farm-node/**"
+      - "apps/hub/**"
       - "pkg/**"
       - "go.work"
   pull_request:
     paths:
-      - "apps/farm/**"
+      - "apps/hub/**"
       - "pkg/**"
       - "go.work"
 
 jobs:
-  # Call the reusable workflow
   ci-pipeline:
     uses: ./.github/workflows/go.jobs.yml
     with:
-      app_dir: "apps/farm"
+      app_dir: "apps/hub"
