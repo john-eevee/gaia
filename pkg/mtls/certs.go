@@ -111,24 +111,23 @@ func (ca *CertificateAuthority) SignCSR(csrPem []byte, validityDays int) ([]byte
 	caBlock, _ := pem.Decode(ca.Certificate)
 	if caBlock == nil {
 		return nil, CertificateError{
-			Message: "SignCSR: failed to decode CA certificate",
+			Message: "failed to decode CA certificate",
 			Op:      CertOpSignCSR,
 		}
 	}
 	caCert, err := x509.ParseCertificate(caBlock.Bytes)
 	if err != nil {
 		return nil, CertificateError{
-			Message: "SignCSR: failed to parse CA certificate",
+			Message: "failed to parse CA certificate",
 			Err:     err,
 			Op:      CertOpSignCSR,
 		}
 	}
-
 	// Parse the CA private key
 	caKey, err := decodeCAPrivateKey(ca.PrivateKey)
 	if err != nil {
 		return nil, CertificateError{
-			Message: "SignCSR: failed to parse CA private key",
+			Message: "failed to parse CA private key",
 			Err:     err,
 			Op:      CertOpSignCSR,
 		}
@@ -137,21 +136,20 @@ func (ca *CertificateAuthority) SignCSR(csrPem []byte, validityDays int) ([]byte
 	// Parse the CSR
 	csrBlock, _ := pem.Decode(csrPem)
 	if csrBlock == nil {
-		return nil, CertificateError{Message: "SignCSR: failed to decode CSR", Op: CertOpSignCSR}
+		return nil, CertificateError{Message: "failed to decode CSR", Op: CertOpSignCSR}
 	}
 	csr, err := x509.ParseCertificateRequest(csrBlock.Bytes)
 	if err != nil {
 		return nil, CertificateError{
-			Message: "SignCSR: failed to parse CSR",
+			Message: "failed to parse CSR",
 			Err:     err,
 			Op:      CertOpSignCSR,
 		}
 	}
-
 	// Check CSR signature
 	if err := csr.CheckSignature(); err != nil {
 		return nil, CertificateError{
-			Message: "SignCSR: CSR signature check failed",
+			Message: "CSR signature check failed",
 			Err:     err,
 			Op:      CertOpSignCSR,
 		}
@@ -161,7 +159,7 @@ func (ca *CertificateAuthority) SignCSR(csrPem []byte, validityDays int) ([]byte
 	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
 		return nil, CertificateError{
-			Message: "SignCSR: failed to generate serial number",
+			Message: "failed to generate serial number",
 			Err:     err,
 			Op:      CertOpSignCSR,
 		}
@@ -185,7 +183,7 @@ func (ca *CertificateAuthority) SignCSR(csrPem []byte, validityDays int) ([]byte
 	certBytes, err := x509.CreateCertificate(rand.Reader, template, caCert, csr.PublicKey, caKey)
 	if err != nil {
 		return nil, CertificateError{
-			Message: "SignCSR: failed to sign certificate",
+			Message: "failed to sign certificate",
 			Err:     err,
 			Op:      CertOpSignCSR,
 		}
@@ -254,7 +252,6 @@ func CreateRootCA(config Config) (CertificateAuthority, error) {
 			Op:      CertOpCreateRootCA,
 		}
 	}
-
 	// Encode certificate to PEM format
 	caPem, err := encodePEM(pemTypeCertificate, caBytes)
 	if err != nil {
@@ -264,7 +261,6 @@ func CreateRootCA(config Config) (CertificateAuthority, error) {
 			Op:      CertOpCreateRootCA,
 		}
 	}
-
 	// Encode private key to PEM format (use PKCS#8)
 	privateKeyPem, err := encodePrivateKeyPEM(privateKey)
 	if err != nil {
