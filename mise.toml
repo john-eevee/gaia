@@ -5,6 +5,7 @@ hugo-extended = "0.155.2"
 elixir = "1.19.5"
 erlang = "28.3"
 lefthook = "2.1.0"
+node = "lts"
 
 [tasks.lint]
 description = "Lint all apps and packages"
@@ -25,7 +26,12 @@ run = "mix workspace.run -t test"
 
 [tasks.setup]
 description = "Setup the project"
-run = ["mise install", "mise run hooks", "mix workspace.run -t setup"]
+run = [
+  "mise install",
+  "mise run hooks",
+  "mix workspace.run -t setup",
+  "npm install --prefix website",
+]
 
 [tasks.hooks]
 description = "Setup hooks"
@@ -51,4 +57,4 @@ dir = "./gaia_lib/"
 [tasks."docs:dev"]
 description = "Runs the documentation website"
 dir = "website"
-run = 'hugo server -D --bind 0.0.0.0'
+run = 'npm run start'
