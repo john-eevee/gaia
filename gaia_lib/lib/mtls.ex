@@ -173,9 +173,9 @@ defmodule GaiaLib.MTls do
 
       if no_common_name and no_organization do
         {:error, "Config validation failed: CSR requires either Common Name or Organization"}
+      else
+        :ok
       end
-
-      :ok
     end
   end
 
