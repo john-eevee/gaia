@@ -82,11 +82,12 @@ defmodule GaiaLib.MTls do
 
   @root_ca_validity_years 10
 
-  # ============================================================================
-  # Structs
-  # ============================================================================
-
   defmodule CertificateAuthority do
+    @moduledoc """
+    Represents a Certificate Authority (CA) with its certificate and private key.
+     - `certificate`: PEM-encoded CA certificate
+     - `private_key`: PEM-encoded private key corresponding to the CA certificate
+    """
     @type t :: %__MODULE__{
             # PEM encoded
             private_key: binary(),
@@ -94,9 +95,44 @@ defmodule GaiaLib.MTls do
             certificate: binary()
           }
     defstruct [:private_key, :certificate]
+
+    defimpl Inspect do
+      import Inspect.Algebra
+
+      def inspect(%CertificateAuthority{} = ca, opts) do
+        private_key = if ca.private_key, do: "[REDACTED]", else: "nil"
+        certificate = if ca.certificate, do: "[REDACTED]", else: "nil"
+
+        {concat([
+           "CertificateAuthority<private_key: ",
+           private_key,
+           ", certificate: ",
+           certificate,
+           ">"
+         ]), opts}
+      end
+    end
   end
 
   defmodule Config do
+    @moduledoc """
+    Configuration for generating certificates and CSRs.
+     This struct can be used for both Root CA creation and CSR generation.
+     - `organization`: The organization name (O)
+     - `organizational_unit`: The organizational unit (OU)
+     - `country`: The country code (C)
+     - `province`: The state or province name (ST)
+     - `locality`: The locality or city name (L)
+     - `street_address`: The street address
+     - `postal_code`: The postal code
+     - `common_name`: The common name (CN), often used for the server's hostname in TLS certs
+     Note: For a Root CA, only Organization and Country are strictly required. Other fields can be optional.
+     For CSRs, the fields can be used to populate the Subject DN as needed.
+     Validation will ensure that at least Organization and Country are provided for Root CA creation.
+     For CSRs, the presence of fields is flexible, but typically Common Name or Organization is included.
+     This struct serves as a convenient way to pass around certificate subject information and can be extended with additional fields if necessary.
+     When creating a Root CA, the same Config can be used for both the issuer and subject since it's self-signed. For CSRs, the Config populates the subject of the CSR.
+    """
     @type t :: %__MODULE__{
             organization: String.t(),
             organizational_unit: String.t(),
@@ -118,23 +154,60 @@ defmodule GaiaLib.MTls do
       :common_name
     ]
 
-    def validate(%Config{organization: org, country: country}) do
+    def validate(config, :root_ca) do
       cond do
-        is_nil(org) or org == "" ->
-          {:error, "Config validation failed: Organization is required"}
+        is_nil(config.organization) or config.organization == "" ->
+          {:error, "Config validation failed: Organization is required for Root CA"}
 
-        is_nil(country) or country == "" ->
-          {:error, "Config validation failed: Country is required"}
+        is_nil(config.country) or config.country == "" ->
+          {:error, "Config validation failed: Country is required for Root CA"}
 
         true ->
           :ok
       end
     end
+
+    def validate(config, :csr) do
+      no_common_name = is_nil(config.common_name) or config.common_name == ""
+      no_organization = is_nil(config.organization) or config.organization == ""
+
+      if no_common_name and no_organization do
+        {:error, "Config validation failed: CSR requires either Common Name or Organization"}
+      end
+
+      :ok
+    end
   end
 
   defmodule CSRCertificate do
+    @moduledoc """
+    Represents a Certificate Signing Request (CSR) along with its associated key pair.
+     - `csr`: PEM-encoded CSR
+     - `private_key`: PEM-encoded private key corresponding to the CSR's public key
+     - `public_key`: PEM-encoded public key included in the CSR
+    """
     @type t :: %__MODULE__{csr: binary(), private_key: binary(), public_key: binary()}
     defstruct [:csr, :private_key, :public_key]
+
+    defimpl Inspect do
+      import Inspect.Algebra
+
+      def inspect(%CSRCertificate{} = csr, opts) do
+        private_key = if csr.private_key, do: "[REDACTED]", else: "nil"
+        public_key = if csr.public_key, do: "[REDACTED]", else: "nil"
+        csr_data = if csr.csr, do: "[REDACTED]", else: "nil"
+
+        {concat([
+           "CSRCertificate<csr: ",
+           csr_data,
+           ", private_key: ",
+           private_key,
+           ", public_key: ",
+           public_key,
+           ">"
+         ]), opts}
+      end
+    end
   end
 
   defmodule Error do
@@ -161,7 +234,7 @@ defmodule GaiaLib.MTls do
   def create_root_ca(%Config{} = config) do
     op = :create_root_ca
 
-    with :ok <- Config.validate(config),
+    with :ok <- Config.validate(config, :root_ca),
          {:ok, serial} <- generate_serial(),
          {pub_key, priv_key} <- generate_ed25519_keypair(),
          # Build TBS (To Be Signed) Certificate
@@ -214,7 +287,8 @@ defmodule GaiaLib.MTls do
   def create_csr_certificate(%Config{} = config) do
     op = :create_csr
 
-    with {pub_key, priv_key} <- generate_ed25519_keypair(),
+    with :ok <- Config.validate(config, :csr),
+         {pub_key, priv_key} <- generate_ed25519_keypair(),
          subject = config_to_rdn(config),
          csr_info =
            cert_req_info(
