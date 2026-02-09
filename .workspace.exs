@@ -5,20 +5,22 @@
   ignore_paths: ~w[deps _build],
 
   # Custom workspace checks for linting your mono-repo at a package level. You can
-  # enforce things like common build dirs or required project depenendencies. For
-  # more details chech the `Workspace.Check` documentation.
+  # enforce things like common build dirs or required project dependencies. For
+  # more details check the `Workspace.Check` documentation.
   checks: [
     [
+      id: :enforce_shared_boundaries,
       module: Workspace.Checks.EnforceBoundaries,
-      descrition: "Only allow shared packages to depend on each other",
+      description: "Only allow shared packages to depend on each other",
       opts: [
         tag: {:scope, :shared},
         allowed_tags: [{:scope, :shared}]
       ]
     ],
     [
+      id: :enforce_app_boundaries,
       module: Workspace.Checks.EnforceBoundaries,
-      descrition: "Apps can only depend on shared packages but not on other apps",
+      description: "Apps can only depend on shared packages but not on other apps",
       opts: [
         tag: {:scope, :app},
         allowed_tags: [{:scope, :shared}],
