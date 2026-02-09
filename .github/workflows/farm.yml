@@ -1,0 +1,19 @@
+name: Farm CI
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "gaia_farm/**"
+      - "gaia_lib/**"
+  pull_request:
+    paths:
+      - "gaia_farm/**"
+      - "gaia_lib/**"
+
+jobs:
+  # Call the reusable workflow
+  ci-pipeline:
+    uses: "./.github/workflows/elixir.yml"
+    with:
+      app_dir: "gaia_farm"

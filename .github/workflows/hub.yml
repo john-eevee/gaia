@@ -1,0 +1,18 @@
+name: Hub CI
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "gaia_hub/**"
+      - "gaia_lib/**"
+  pull_request:
+    paths:
+      - "gaia_hub/**"
+      - "gaia_lib/**"
+
+jobs:
+  ci-pipeline:
+    uses: ./.github/workflows/elixir.yml
+    with:
+      app_dir: "gaia_hub"

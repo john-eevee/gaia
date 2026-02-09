@@ -1,0 +1,54 @@
+[tools]
+typos = "1.43.1"
+lychee = "0.22.0"
+hugo-extended = "0.155.2"
+elixir = "1.19.5"
+erlang = "28.3"
+lefthook = "2.1.0"
+
+[tasks.lint]
+description = "Lint all apps and packages"
+run = "mix workspace.run -t credo --format=json"
+
+[tasks.format]
+description = "Format code strictly"
+run = "mix workspace.run -t format"
+
+[tasks.vuln]
+description = "Check for vulnerabilities"
+run = "mix workspace.run -t deps.audit"
+
+
+[tasks.test]
+description = "Tests the project and its sub apps"
+run = "mix workspace.run -t test"
+
+[tasks.setup]
+description = "Setup the project"
+run = ["mise install", "mise run hooks", "mix workspace.run -t setup"]
+
+[tasks.hooks]
+description = "Setup hooks"
+run = "lefthook install"
+
+[tasks."farm:test"]
+description = "Run test in farm"
+run = "mix test"
+dir = "./gaia_farm"
+
+[tasks."hub:test"]
+description = "Run test in hub"
+run = "mix test"
+dir = "./gaia_hub"
+
+
+[tasks."lib:test"]
+description = "Run test in gaia_lib"
+run = "mix test"
+dir = "./gaia_lib/"
+
+
+[tasks."docs:dev"]
+description = "Runs the documentation website"
+dir = "website"
+run = 'hugo server -D --bind 0.0.0.0'

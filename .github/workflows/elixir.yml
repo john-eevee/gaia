@@ -1,0 +1,25 @@
+name: Elixir Template CI
+# This workflow runs only when called by another workflow
+on:
+  workflow_call:
+    inputs:
+      app_dir:
+        required: true
+        type: string
+        description: "The directory of the app to test (e.g., apps/farm)"
+
+jobs:
+  quality-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      # Setup Mise (caches dependencies automatically)
+      - uses: jdx/mise-action@v3
+      # Run Lint (using the path passed in the input)
+      - name: Lint
+        working-directory: ${{ inputs.app_dir }}
+        run: mise run lint
+      # Run Tests
+      - name: Test
+        working-directory: ${{ inputs.app_dir }}
+        run: go test -v ./...
