@@ -11,6 +11,9 @@ on:
 jobs:
   quality-check:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -eo pipefail {0}
     steps:
       - uses: actions/checkout@v6
       # Setup Mise (caches dependencies automatically)
