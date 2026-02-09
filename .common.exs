@@ -1,7 +1,7 @@
 defmodule Gaia.Common do
   def version do
     case System.get_env("VERSION") do
-      nil -> "./VERSION" |> File.read!() |> String.trim()
+      nil ->  __DIR__ <> "/VERSION" |> File.read!() |> String.trim()
       version -> version
     end
     |> Version.parse!()
