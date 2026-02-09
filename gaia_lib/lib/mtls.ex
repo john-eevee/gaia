@@ -11,55 +11,55 @@ defmodule GaiaLib.MTls do
   Record.defrecordp(
     :otp_cert,
     :OTPCertificate,
-    extract(:OTPCertificate, from_lib: "public_key/include/public_key.hrl")
+    Record.extract(:OTPCertificate, from_lib: "public_key/include/public_key.hrl")
   )
 
   Record.defrecordp(
     :tbs_cert,
     :OTPTBSCertificate,
-    extract(:OTPTBSCertificate, from_lib: "public_key/include/public_key.hrl")
+    Record.extract(:OTPTBSCertificate, from_lib: "public_key/include/public_key.hrl")
   )
 
   Record.defrecordp(
     :cert_req,
     :CertificationRequest,
-    extract(:CertificationRequest, from_lib: "public_key/include/public_key.hrl")
+    Record.extract(:CertificationRequest, from_lib: "public_key/include/public_key.hrl")
   )
 
   Record.defrecordp(
     :cert_req_info,
     :CertificationRequestInfo,
-    extract(:CertificationRequestInfo, from_lib: "public_key/include/public_key.hrl")
+    Record.extract(:CertificationRequestInfo, from_lib: "public_key/include/public_key.hrl")
   )
 
   Record.defrecordp(
     :attribute,
     :Attribute,
-    extract(:Attribute, from_lib: "public_key/include/public_key.hrl")
+    Record.extract(:Attribute, from_lib: "public_key/include/public_key.hrl")
   )
 
   Record.defrecordp(
     :algo_id,
     :AlgorithmIdentifier,
-    extract(:AlgorithmIdentifier, from_lib: "public_key/include/public_key.hrl")
+    Record.extract(:AlgorithmIdentifier, from_lib: "public_key/include/public_key.hrl")
   )
 
   Record.defrecordp(
     :extension,
     :Extension,
-    extract(:Extension, from_lib: "public_key/include/public_key.hrl")
+    Record.extract(:Extension, from_lib: "public_key/include/public_key.hrl")
   )
 
   Record.defrecordp(
     :validity,
     :Validity,
-    extract(:Validity, from_lib: "public_key/include/public_key.hrl")
+    Record.extract(:Validity, from_lib: "public_key/include/public_key.hrl")
   )
 
   Record.defrecordp(
     :spki,
     :SubjectPublicKeyInfo,
-    extract(:SubjectPublicKeyInfo, from_lib: "public_key/include/public_key.hrl")
+    Record.extract(:SubjectPublicKeyInfo, from_lib: "public_key/include/public_key.hrl")
   )
 
   # OIDs
@@ -477,7 +477,6 @@ defmodule GaiaLib.MTls do
 
     # Extract Public Key from CSR
     spki_rec = cert_req_info(info, :subjectPKInfo)
-    der_key = spki(spki_rec, :subjectPublicKey)
 
     # Ed25519 keys in SPKI are wrapped; for verification we need the raw key.
     # However, :public_key.verify can handle the SPKI record format if we pass the whole record or correct type.
@@ -694,11 +693,9 @@ defmodule GaiaLib.MTls do
   end
 
   defp config_to_rdn(config) do
-    # Use :rdnSequence format: [[AttributeTypeAndValue]]
-    # AttributeTypeAndValue :: {type, value}
-    # Note: Value needs to be encoded as DirectoryString or PrintableString usually.
-    # The :public_key.pkix_encode handles the string wrapping if we pass standard types?
-    # No, usually better to explicitly wrap string types: {:utf8String, "binary"}
+    # Build RDN Sequence for X.509 Distinguished Names
+    # Format: {:rdnSequence, [RelativeDistinguishedName]}
+    # RelativeDistinguishedName is a list of {OID, Value} pairs
 
     attrs = [
       {@oid_org, config.organization},
@@ -711,12 +708,13 @@ defmodule GaiaLib.MTls do
       {@oid_common_name, config.common_name}
     ]
 
-    # Filter nil/empty and map to RDN structure
+    # Filter nil/empty, create RDN components
     rdn_list =
       attrs
       |> Enum.reject(fn {_oid, v} -> v in [nil, ""] end)
       |> Enum.map(fn {oid, val} ->
-        [attribute(type: oid, value: {:utf8String, val})]
+        # Each RDN is a set of attribute pairs: [{OID, Value}]
+        [{oid, val}]
       end)
 
     {:rdnSequence, rdn_list}
