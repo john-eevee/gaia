@@ -29,17 +29,12 @@ jobs:
 
       - name: Setup Tools (Mise)
         uses: jdx/mise-action@v3
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
       - name: Install dependencies
         working-directory: ./website
-        run: npm ci
+        run: npm install
       - name: Build with Docusaurus
         working-directory: ./website
         run: npm run build
-
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
