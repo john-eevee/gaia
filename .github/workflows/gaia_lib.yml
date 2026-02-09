@@ -1,0 +1,17 @@
+name: Gaia Lib CI
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "gaia_lib/**"
+  pull_request:
+    paths:
+      - "gaia_lib/**"
+
+jobs:
+  # Call the reusable workflow
+  ci-pipeline:
+    uses: "./.github/workflows/elixir.yml"
+    with:
+      app_dir: "gaia_lib"
