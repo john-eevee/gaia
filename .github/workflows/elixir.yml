@@ -19,10 +19,12 @@ jobs:
       # Setup Mise (caches dependencies automatically)
       - uses: jdx/mise-action@v3
       # Run Lint (using the path passed in the input)
+      - name: Setup Hex
+        run: mix local.hex --force && mix local.rebar --force
       - name: Lint
         working-directory: ${{ inputs.app_dir }}
-        run: mise run lint
+        run: mix credo --strict --format=json
       # Run Tests
       - name: Test
         working-directory: ${{ inputs.app_dir }}
-        run: go test -v ./...
+        run: mix test
