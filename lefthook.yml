@@ -1,0 +1,23 @@
+output: false
+pre-commit:
+  parallel: true
+  commands:
+    lint:
+      glob: "*.ex,*.exs"
+      run: mix credo --strict --format=json
+      stage_fixed: true
+    format:
+      glob: "*.ex,*.exs"
+      run: mix format {staged_files}
+      stage_fixed: true
+    fix-typos:
+      run: typos --write-changes {staged_files}
+      stage_fixed: true
+    links:
+      glob: "*.md"
+      run: lychee {staged_files}
+
+commit-msg:
+  commands:
+    "lint-commit-msg":
+      run: ./scripts/validate-commit.sh {1}
