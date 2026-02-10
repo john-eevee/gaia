@@ -27,7 +27,8 @@ defmodule GaiaLib.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      DepsCatalog.get_dep(:credo)
+      DepsCatalog.get_dep(:credo),
+      DepsCatalog.get_dep(:x509)
     ]
   end
 

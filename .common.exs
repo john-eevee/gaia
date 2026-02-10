@@ -27,7 +27,8 @@ defmodule Gaia.Common do
 
     defp deps do
       [
-        {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
+        {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+        {:x509, "~> 0.9"}
       ]
     end
   end
