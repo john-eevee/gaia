@@ -1,10 +1,10 @@
-defmodule GaiaLib.MTls do
+defmodule GaiaLib.Certs do
   @moduledoc """
   Mtls provides functionality to generate Root CA certificates, create CSRs,
   and sign certificates using Ed25519 keys via OpenSSL.
   """
 
-  alias GaiaLib.MTls.{CertificateAuthority, CSRCertificate, Config, Error}
+  alias GaiaLib.Certs.{CertificateAuthority, CSRCertificate, Config, Error}
 
   @root_ca_validity_years 10
 
@@ -219,7 +219,7 @@ defmodule GaiaLib.MTls do
 
       try do
         # Create PKCS8 PEM manually from the raw 32-byte key
-        # PKCS8 structure for Ed25519: 
+        # PKCS8 structure for Ed25519:
         # The raw key is wrapped in an OCTET STRING inside PrivateKeyInfo
         pkcs8_pem = encode_ed25519_pkcs8(priv_key)
         {:ok, pkcs8_pem}
