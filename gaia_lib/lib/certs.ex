@@ -1,12 +1,12 @@
 defmodule GaiaLib.Certs do
   @moduledoc """
   Mtls provides functionality to generate Root CA certificates, create CSRs,
-  and sign certificates using Ed25519 keys via OpenSSL.
+  and sign certificates using Ed25519 keys via the x509 library.
   """
 
-  alias GaiaLib.Certs.{CertificateAuthority, CSRCertificate, Config, Error}
+  alias GaiaLib.Certs.{CertificateAuthority, CSRCertificate, CertConfig, Error}
 
-  @root_ca_validity_years 10
+  @root_ca_validity_days 3650
 
   defmodule CertificateAuthority do
     @moduledoc """
@@ -38,7 +38,7 @@ defmodule GaiaLib.Certs do
     end
   end
 
-  defmodule Config do
+  defmodule CertConfig do
     @moduledoc """
     Configuration for generating certificates and CSRs.
     """
@@ -133,14 +133,14 @@ defmodule GaiaLib.Certs do
   # Public API
   # ============================================================================
 
-  @spec create_root_ca(Config.t()) :: {:ok, CertificateAuthority.t()} | {:error, Error.t()}
-  def create_root_ca(%Config{} = config) do
+  @spec create_root_ca(CertConfig.t()) :: {:ok, CertificateAuthority.t()} | {:error, Error.t()}
+  def create_root_ca(%CertConfig{} = config) do
     op = :create_root_ca
 
-    with :ok <- Config.validate(config, :root_ca),
+    with :ok <- CertConfig.validate(config, :root_ca),
          {:ok, priv_key_pem} <- generate_and_encode_ed25519_key(),
          {:ok, cert_pem} <-
-           create_self_signed_cert(config, priv_key_pem, @root_ca_validity_years * 365) do
+           create_self_signed_cert(config, priv_key_pem, @root_ca_validity_days) do
       {:ok, %CertificateAuthority{certificate: cert_pem, private_key: priv_key_pem}}
     else
       {:error, reason} when is_binary(reason) ->
@@ -169,13 +169,13 @@ defmodule GaiaLib.Certs do
     end
   end
 
-  @spec create_csr_certificate(Config.t()) :: {:ok, CSRCertificate.t()} | {:error, Error.t()}
-  def create_csr_certificate(%Config{} = config) do
+  @spec create_csr_certificate(CertConfig.t()) :: {:ok, CSRCertificate.t()} | {:error, Error.t()}
+  def create_csr_certificate(%CertConfig{} = config) do
     op = :create_csr
 
-    with :ok <- Config.validate(config, :csr),
+    with :ok <- CertConfig.validate(config, :csr),
          {:ok, priv_key_pem} <- generate_and_encode_ed25519_key(),
-         {:ok, csr_pem} <- create_csr_with_openssl(config, priv_key_pem),
+         {:ok, csr_pem} <- create_csr(config, priv_key_pem),
          {:ok, pub_key_pem} <- extract_public_key(priv_key_pem) do
       {:ok, %CSRCertificate{csr: csr_pem, private_key: priv_key_pem, public_key: pub_key_pem}}
     else
@@ -210,159 +210,53 @@ defmodule GaiaLib.Certs do
 
   defp generate_and_encode_ed25519_key do
     try do
-      # Generate Ed25519 key pair using crypto module
+      # Generate Ed25519 key pair using the crypto module
       {_pub_key, priv_key} = :crypto.generate_key(:eddsa, :ed25519)
 
-      # Create a temporary directory
-      temp_dir = Path.join(System.tmp_dir!(), "gaia_mtls_#{:erlang.unique_integer()}")
-      File.mkdir_p!(temp_dir)
+      # Create an EC private key record for Ed25519
+      # The x509 library expects ec_private_key records with the ed25519 OID
+      # OID for id-Ed25519
+      oid_ed25519 = {1, 3, 101, 112}
 
-      try do
-        # Create PKCS8 PEM manually from the raw 32-byte key
-        # PKCS8 structure for Ed25519:
-        # The raw key is wrapped in an OCTET STRING inside PrivateKeyInfo
-        pkcs8_pem = encode_ed25519_pkcs8(priv_key)
-        {:ok, pkcs8_pem}
-      after
-        File.rm_rf!(temp_dir)
-      end
+      ec_key =
+        {:ECPrivateKey, 1, priv_key, {:namedCurve, oid_ed25519}, :asn1_NOVALUE}
+
+      # Convert to PEM - x509 will wrap it in PKCS#8 automatically for Ed25519
+      priv_pem = X509.PrivateKey.to_pem(ec_key)
+      {:ok, priv_pem}
     rescue
       e -> {:error, "failed to generate Ed25519 key: #{inspect(e)}"}
     end
   end
 
-  defp encode_ed25519_pkcs8(priv_key) when is_binary(priv_key) and byte_size(priv_key) == 32 do
-    # PKCS#8 structure for Ed25519
-    # PrivateKeyInfo ::= SEQUENCE {
-    #   version INTEGER,
-    #   privateKeyAlgorithm AlgorithmIdentifier,
-    #   privateKey OCTET STRING,
-    #   ...
-    # }
-
-    # Build DER manually
-    # OID for Ed25519
-    oid_ed25519 = <<0x06, 0x03, 0x2B, 0x65, 0x70>>
-    # INTEGER 0
-    version = <<0x02, 0x01, 0x00>>
-
-    # AlgorithmIdentifier SEQUENCE - includes OID tag and length bytes
-    algo_id = <<0x30, 0x05>> <> oid_ed25519
-
-    # OCTET STRING containing the private key
-    # First layer: wrap raw key in OCTET STRING (0x04 0x20)
-    inner_octets = <<0x04, 0x20>> <> priv_key
-    # Second layer: wrap the inner OCTET STRING in an OCTET STRING for PrivateKey
-    priv_key_octets = <<0x04, byte_size(inner_octets)>> <> inner_octets
-
-    # Full PrivateKeyInfo SEQUENCE
-    pkcs8_content = version <> algo_id <> priv_key_octets
-    pkcs8_length = byte_size(pkcs8_content)
-
-    pkcs8_der =
-      if pkcs8_length < 128 do
-        <<0x30, pkcs8_length>> <> pkcs8_content
-      else
-        len_bytes = :binary.encode_unsigned(pkcs8_length)
-        <<0x30, 0x81, len_bytes::binary>> <> pkcs8_content
-      end
-
-    # Encode to PEM
-    der_to_pem(pkcs8_der, "PRIVATE KEY")
-  end
-
-  defp der_to_pem(der, label) when is_binary(der) do
-    encoded = Base.encode64(der, padding: true)
-
-    lines =
-      encoded
-      |> String.split("", trim: true)
-      |> Enum.chunk_every(64)
-      |> Enum.map_join("\n", &Enum.join/1)
-
-    "-----BEGIN #{label}-----\n#{lines}\n-----END #{label}-----\n"
-  end
-
   defp create_self_signed_cert(config, priv_key_pem, validity_days) do
     try do
-      # Build subject DN string
-      subject_dn = config_to_subject_string(config)
+      private_key = X509.PrivateKey.from_pem!(priv_key_pem)
+      subject_rdn = config_to_rdn(config)
 
-      # Create temporary files
-      key_file = Path.join(System.tmp_dir!(), "ca_key_#{:erlang.unique_integer()}.pem")
-      cert_file = Path.join(System.tmp_dir!(), "ca_cert_#{:erlang.unique_integer()}.pem")
+      cert =
+        X509.Certificate.self_signed(
+          private_key,
+          subject_rdn,
+          template: :root_ca,
+          validity: validity_days
+        )
 
-      try do
-        # Write key to temp file
-        File.write!(key_file, priv_key_pem)
-
-        # Use OpenSSL to create self-signed certificate
-        result =
-          System.cmd("openssl", [
-            "req",
-            "-new",
-            "-x509",
-            "-days",
-            Integer.to_string(validity_days),
-            "-key",
-            key_file,
-            "-out",
-            cert_file,
-            "-subj",
-            subject_dn
-          ])
-
-        case result do
-          {_, 0} ->
-            cert_pem = File.read!(cert_file)
-            {:ok, cert_pem}
-
-          {error_msg, code} ->
-            {:error, "OpenSSL req failed (code #{code}): #{error_msg}"}
-        end
-      after
-        safe_rm(key_file)
-        safe_rm(cert_file)
-      end
+      cert_pem = X509.Certificate.to_pem(cert)
+      {:ok, cert_pem}
     rescue
       e -> {:error, "failed to create self-signed certificate: #{inspect(e)}"}
     end
   end
 
-  defp create_csr_with_openssl(config, priv_key_pem) do
+  defp create_csr(config, priv_key_pem) do
     try do
-      subject_dn = config_to_subject_string(config)
+      private_key = X509.PrivateKey.from_pem!(priv_key_pem)
+      subject_rdn = config_to_rdn(config)
 
-      key_file = Path.join(System.tmp_dir!(), "csr_key_#{:erlang.unique_integer()}.pem")
-      csr_file = Path.join(System.tmp_dir!(), "csr_#{:erlang.unique_integer()}.pem")
-
-      try do
-        File.write!(key_file, priv_key_pem)
-
-        result =
-          System.cmd("openssl", [
-            "req",
-            "-new",
-            "-key",
-            key_file,
-            "-out",
-            csr_file,
-            "-subj",
-            subject_dn
-          ])
-
-        case result do
-          {_, 0} ->
-            csr_pem = File.read!(csr_file)
-            {:ok, csr_pem}
-
-          {error_msg, code} ->
-            {:error, "OpenSSL req failed (code #{code}): #{error_msg}"}
-        end
-      after
-        safe_rm(key_file)
-        safe_rm(csr_file)
-      end
+      csr = X509.CSR.new(private_key, subject_rdn)
+      csr_pem = X509.CSR.to_pem(csr)
+      {:ok, csr_pem}
     rescue
       e -> {:error, "failed to create CSR: #{inspect(e)}"}
     end
@@ -370,51 +264,22 @@ defmodule GaiaLib.Certs do
 
   defp sign_csr_with_openssl(%CertificateAuthority{} = ca, csr_pem, validity_days) do
     try do
-      ca_key_file = Path.join(System.tmp_dir!(), "ca_key_sign_#{:erlang.unique_integer()}.pem")
-      ca_cert_file = Path.join(System.tmp_dir!(), "ca_cert_sign_#{:erlang.unique_integer()}.pem")
-      csr_input_file = Path.join(System.tmp_dir!(), "csr_input_#{:erlang.unique_integer()}.pem")
+      ca_key = X509.PrivateKey.from_pem!(ca.private_key)
+      ca_cert = X509.Certificate.from_pem!(ca.certificate)
+      csr = X509.CSR.from_pem!(csr_pem)
 
-      cert_output_file =
-        Path.join(System.tmp_dir!(), "cert_output_#{:erlang.unique_integer()}.pem")
+      cert =
+        csr
+        |> X509.CSR.public_key()
+        |> X509.Certificate.new(
+          X509.CSR.subject(csr),
+          ca_cert,
+          ca_key,
+          validity: validity_days
+        )
 
-      try do
-        File.write!(ca_key_file, ca.private_key)
-        File.write!(ca_cert_file, ca.certificate)
-        File.write!(csr_input_file, csr_pem)
-
-        result =
-          System.cmd("openssl", [
-            "x509",
-            "-req",
-            "-in",
-            csr_input_file,
-            "-CA",
-            ca_cert_file,
-            "-CAkey",
-            ca_key_file,
-            "-CAcreateserial",
-            "-out",
-            cert_output_file,
-            "-days",
-            Integer.to_string(validity_days)
-          ])
-
-        case result do
-          {_, 0} ->
-            cert_pem = File.read!(cert_output_file)
-            {:ok, cert_pem}
-
-          {error_msg, code} ->
-            {:error, "OpenSSL x509 failed (code #{code}): #{error_msg}"}
-        end
-      after
-        safe_rm(ca_key_file)
-        safe_rm(ca_cert_file)
-        safe_rm(csr_input_file)
-        safe_rm(cert_output_file)
-        # Clean up the serial file that OpenSSL creates
-        safe_rm(ca_cert_file <> ".srl")
-      end
+      cert_pem = X509.Certificate.to_pem(cert)
+      {:ok, cert_pem}
     rescue
       e -> {:error, "failed to sign CSR: #{inspect(e)}"}
     end
@@ -422,34 +287,10 @@ defmodule GaiaLib.Certs do
 
   defp extract_public_key(priv_key_pem) do
     try do
-      key_file = Path.join(System.tmp_dir!(), "priv_key_#{:erlang.unique_integer()}.pem")
-      pub_file = Path.join(System.tmp_dir!(), "pub_key_#{:erlang.unique_integer()}.pem")
-
-      try do
-        File.write!(key_file, priv_key_pem)
-
-        result =
-          System.cmd("openssl", [
-            "pkey",
-            "-in",
-            key_file,
-            "-pubout",
-            "-out",
-            pub_file
-          ])
-
-        case result do
-          {_, 0} ->
-            pub_pem = File.read!(pub_file)
-            {:ok, pub_pem}
-
-          {error_msg, code} ->
-            {:error, "OpenSSL pkey failed (code #{code}): #{error_msg}"}
-        end
-      after
-        safe_rm(key_file)
-        safe_rm(pub_file)
-      end
+      private_key = X509.PrivateKey.from_pem!(priv_key_pem)
+      public_key = X509.PublicKey.derive(private_key)
+      pub_pem = X509.PublicKey.to_pem(public_key)
+      {:ok, pub_pem}
     rescue
       e -> {:error, "failed to extract public key: #{inspect(e)}"}
     end
@@ -459,17 +300,13 @@ defmodule GaiaLib.Certs do
   # Helper Functions
   # ============================================================================
 
-  defp safe_rm(file_path) do
-    File.rm(file_path)
-  rescue
-    _ -> :ok
-  end
-
   # ============================================================================
   # DN Handling
   # ============================================================================
 
-  defp config_to_subject_string(config) do
+  defp config_to_rdn(config) do
+    # Build a name string compatible with x509
+    # Format: "/C=.../ST=.../L=.../O=.../OU=.../STREET=.../postalCode=.../CN=..."
     parts = []
 
     parts = if config.country, do: parts ++ ["C=#{config.country}"], else: parts
@@ -496,49 +333,21 @@ defmodule GaiaLib.Certs do
   # ============================================================================
 
   defp verify_key_matches_cert(cert_pem, key_pem) do
-    with {:ok, pub_key_from_key} <- extract_public_key(key_pem),
-         {:ok, pub_key_from_cert} <- extract_public_key_from_cert(cert_pem) do
-      if pub_key_from_key == pub_key_from_cert do
+    try do
+      private_key = X509.PrivateKey.from_pem!(key_pem)
+      cert = X509.Certificate.from_pem!(cert_pem)
+
+      pub_key_from_key = X509.PublicKey.derive(private_key)
+      pub_key_from_cert = X509.Certificate.public_key(cert)
+
+      # Compare the DER-encoded representations
+      if X509.PublicKey.to_der(pub_key_from_key) == X509.PublicKey.to_der(pub_key_from_cert) do
         :ok
       else
         {:error, "private key does not match certificate"}
       end
-    else
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  defp extract_public_key_from_cert(cert_pem) when is_binary(cert_pem) do
-    pub_file = Path.join(System.tmp_dir!(), "pub_key_from_cert_#{:erlang.unique_integer()}.pem")
-    cert_file = Path.join(System.tmp_dir!(), "ca_cert_#{:erlang.unique_integer()}.pem")
-
-    try do
-      File.write!(cert_file, cert_pem)
-
-      result =
-        System.cmd("openssl", [
-          "x509",
-          "-in",
-          cert_file,
-          "-pubkey",
-          "-noout",
-          "-out",
-          pub_file
-        ])
-
-      case result do
-        {_, 0} ->
-          pub_pem = File.read!(pub_file)
-          {:ok, pub_pem}
-
-        {error_msg, code} ->
-          {:error, "OpenSSL failed to extract public key from cert (code #{code}): #{error_msg}"}
-      end
     rescue
-      e -> {:error, "failed to extract public key from certificate: #{inspect(e)}"}
-    after
-      safe_rm(cert_file)
-      safe_rm(pub_file)
+      e -> {:error, "failed to verify key matches cert: #{inspect(e)}"}
     end
   end
 
