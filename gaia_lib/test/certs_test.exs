@@ -32,7 +32,7 @@ defmodule GaiaLib.CertsTest do
         country: "US"
       }
 
-      assert {:error, msg} = Config.validate(config, :root_ca)
+      assert {:error, msg} = CertConfig.validate(config, :root_ca)
       assert msg =~ "Organization is required"
     end
 
@@ -42,7 +42,7 @@ defmodule GaiaLib.CertsTest do
         country: nil
       }
 
-      assert {:error, msg} = Config.validate(config, :root_ca)
+      assert {:error, msg} = CertConfig.validate(config, :root_ca)
       assert msg =~ "Country is required"
     end
 
@@ -52,7 +52,7 @@ defmodule GaiaLib.CertsTest do
         country: ""
       }
 
-      assert {:error, msg} = Config.validate(config, :root_ca)
+      assert {:error, msg} = CertConfig.validate(config, :root_ca)
       assert msg =~ "Country is required"
     end
   end
@@ -180,7 +180,7 @@ defmodule GaiaLib.CertsTest do
     test "returns error when certificate is not a CA" do
       # Create a CSR (which is not a CA certificate)
       config = %CertConfig{organization: "Test Org", common_name: "test.com"}
-      {:ok, _csr_cert} = Certs.create_csr_certificate(config)
+      {:ok, _csr_cert} = Certs.create_csr(config)
 
       # Try to load it as a CA - this should fail
       config2 = %CertConfig{organization: "Test Org", country: "US"}
@@ -214,10 +214,10 @@ defmodule GaiaLib.CertsTest do
     end
   end
 
-  describe "create_csr_certificate/1" do
+  describe "create_csr/1" do
     test "creates a valid CSR with common name" do
       config = %CertConfig{common_name: "test.example.com"}
-      assert {:ok, csr} = Certs.create_csr_certificate(config)
+      assert {:ok, csr} = Certs.create_csr(config)
       assert csr.csr != nil
       assert csr.private_key != nil
       assert csr.public_key != nil
@@ -228,7 +228,7 @@ defmodule GaiaLib.CertsTest do
 
     test "creates a valid CSR with organization" do
       config = %CertConfig{organization: "Test Organization"}
-      assert {:ok, csr} = Certs.create_csr_certificate(config)
+      assert {:ok, csr} = Certs.create_csr(config)
       assert csr.csr != nil
       assert csr.private_key != nil
       assert csr.public_key != nil
@@ -246,7 +246,7 @@ defmodule GaiaLib.CertsTest do
         common_name: "server.example.com"
       }
 
-      assert {:ok, csr} = Certs.create_csr_certificate(config)
+      assert {:ok, csr} = Certs.create_csr(config)
       assert csr.csr != nil
       assert csr.private_key != nil
       assert csr.public_key != nil
@@ -254,28 +254,28 @@ defmodule GaiaLib.CertsTest do
 
     test "returns error when config has no common name or organization" do
       config = %CertConfig{}
-      assert {:error, error} = Certs.create_csr_certificate(config)
+      assert {:error, error} = Certs.create_csr(config)
       assert error.op == :create_csr
       assert error.message =~ "Common Name or Organization"
     end
 
     test "CSR is in valid PEM format" do
       config = %CertConfig{common_name: "test.example.com"}
-      {:ok, csr} = Certs.create_csr_certificate(config)
+      {:ok, csr} = Certs.create_csr(config)
       assert String.starts_with?(csr.csr, "-----BEGIN CERTIFICATE REQUEST-----")
       assert String.ends_with?(String.trim(csr.csr), "-----END CERTIFICATE REQUEST-----")
     end
 
     test "private key is in valid PEM format" do
       config = %CertConfig{common_name: "test.example.com"}
-      {:ok, csr} = Certs.create_csr_certificate(config)
+      {:ok, csr} = Certs.create_csr(config)
       assert String.starts_with?(csr.private_key, "-----BEGIN PRIVATE KEY-----")
       assert String.ends_with?(String.trim(csr.private_key), "-----END PRIVATE KEY-----")
     end
 
     test "public key is in valid PEM format" do
       config = %CertConfig{common_name: "test.example.com"}
-      {:ok, csr} = Certs.create_csr_certificate(config)
+      {:ok, csr} = Certs.create_csr(config)
       assert String.starts_with?(csr.public_key, "-----BEGIN PUBLIC KEY-----")
       assert String.ends_with?(String.trim(csr.public_key), "-----END PUBLIC KEY-----")
     end
@@ -289,7 +289,7 @@ defmodule GaiaLib.CertsTest do
 
       # Create a CSR
       csr_config = %CertConfig{common_name: "server.example.com"}
-      {:ok, csr} = Certs.create_csr_certificate(csr_config)
+      {:ok, csr} = Certs.create_csr(csr_config)
 
       # Sign the CSR
       assert {:ok, cert} = Certs.sign_csr(ca, csr.csr, 365)
@@ -301,7 +301,7 @@ defmodule GaiaLib.CertsTest do
       {:ok, ca} = Certs.create_root_ca(ca_config)
 
       csr_config = %CertConfig{common_name: "server.example.com"}
-      {:ok, csr} = Certs.create_csr_certificate(csr_config)
+      {:ok, csr} = Certs.create_csr(csr_config)
 
       {:ok, cert} = Certs.sign_csr(ca, csr.csr, 365)
       assert String.starts_with?(cert, "-----BEGIN CERTIFICATE-----")
@@ -313,7 +313,7 @@ defmodule GaiaLib.CertsTest do
       {:ok, ca} = Certs.create_root_ca(ca_config)
 
       csr_config = %CertConfig{common_name: "server.example.com"}
-      {:ok, csr} = Certs.create_csr_certificate(csr_config)
+      {:ok, csr} = Certs.create_csr(csr_config)
 
       {:ok, signed_cert} = Certs.sign_csr(ca, csr.csr, 365)
 
@@ -333,7 +333,7 @@ defmodule GaiaLib.CertsTest do
 
     test "returns error with invalid CA" do
       csr_config = %CertConfig{common_name: "server.example.com"}
-      {:ok, csr} = Certs.create_csr_certificate(csr_config)
+      {:ok, csr} = Certs.create_csr(csr_config)
 
       invalid_ca = %CertificateAuthority{
         certificate: "invalid cert",
@@ -350,7 +350,7 @@ defmodule GaiaLib.CertsTest do
       {:ok, ca} = Certs.create_root_ca(ca_config)
 
       csr_config = %CertConfig{common_name: "server.example.com"}
-      {:ok, csr} = Certs.create_csr_certificate(csr_config)
+      {:ok, csr} = Certs.create_csr(csr_config)
 
       {:ok, cert_30} = Certs.sign_csr(ca, csr.csr, 30)
       {:ok, cert_365} = Certs.sign_csr(ca, csr.csr, 365)
@@ -366,11 +366,11 @@ defmodule GaiaLib.CertsTest do
 
       # Create and sign multiple CSRs
       csr1_config = %CertConfig{common_name: "server1.example.com"}
-      {:ok, csr1} = Certs.create_csr_certificate(csr1_config)
+      {:ok, csr1} = Certs.create_csr(csr1_config)
       {:ok, cert1} = Certs.sign_csr(ca, csr1.csr, 365)
 
       csr2_config = %CertConfig{common_name: "server2.example.com"}
-      {:ok, csr2} = Certs.create_csr_certificate(csr2_config)
+      {:ok, csr2} = Certs.create_csr(csr2_config)
       {:ok, cert2} = Certs.sign_csr(ca, csr2.csr, 365)
 
       # Both certificates should be valid and different
@@ -463,7 +463,7 @@ defmodule GaiaLib.CertsTest do
         country: "US"
       }
 
-      {:ok, csr} = Certs.create_csr_certificate(csr_config)
+      {:ok, csr} = Certs.create_csr(csr_config)
 
       # Sign the CSR
       {:ok, signed_cert} = Certs.sign_csr(ca, csr.csr, 365)
@@ -490,7 +490,7 @@ defmodule GaiaLib.CertsTest do
 
       # Use the reloaded CA to sign a CSR
       csr_config = %CertConfig{common_name: "test.example.com"}
-      {:ok, csr} = Certs.create_csr_certificate(csr_config)
+      {:ok, csr} = Certs.create_csr(csr_config)
 
       {:ok, signed_cert} = Certs.sign_csr(reloaded_ca, csr.csr, 365)
 

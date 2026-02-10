@@ -7,6 +7,7 @@ defmodule GaiaLib.Certs do
   alias GaiaLib.Certs.{CertificateAuthority, CSRCertificate, CertConfig, Error}
 
   @root_ca_validity_days 3650
+  @key_curve :ed25519
 
   defmodule CertificateAuthority do
     @moduledoc """
@@ -86,6 +87,24 @@ defmodule GaiaLib.Certs do
         :ok
       end
     end
+
+    def to_rdn(config) do
+      rnd_string =
+        [
+          {"O", config.organization},
+          {"OU", config.organizational_unit},
+          {"C", config.country},
+          {"ST", config.province},
+          {"L", config.locality},
+          {"STREET", config.street_address},
+          {"PC", config.postal_code},
+          {"CN", config.common_name}
+        ]
+        |> Enum.filter(fn {_k, v} -> not is_nil(v) and v != "" end)
+        |> Enum.map_join("/", fn {k, v} -> "#{k}=#{v}" end)
+
+      "/" <> rnd_string
+    end
   end
 
   defmodule CSRCertificate do
@@ -129,252 +148,38 @@ defmodule GaiaLib.Certs do
     def message(%__MODULE__{message: msg, err: err}), do: "#{msg}: #{inspect(err)}"
   end
 
-  # ============================================================================
-  # Public API
-  # ============================================================================
-
-  @spec create_root_ca(CertConfig.t()) :: {:ok, CertificateAuthority.t()} | {:error, Error.t()}
-  def create_root_ca(%CertConfig{} = config) do
-    op = :create_root_ca
-
-    with :ok <- CertConfig.validate(config, :root_ca),
-         {:ok, priv_key_pem} <- generate_and_encode_ed25519_key(),
-         {:ok, cert_pem} <-
-           create_self_signed_cert(config, priv_key_pem, @root_ca_validity_days) do
-      {:ok, %CertificateAuthority{certificate: cert_pem, private_key: priv_key_pem}}
-    else
-      {:error, reason} when is_binary(reason) ->
-        {:error, %Error{message: reason, op: op}}
-
-      error ->
-        {:error, %Error{message: inspect(error), op: op, err: error}}
-    end
-  end
-
-  @spec load_root_ca(binary(), binary()) ::
-          {:ok, CertificateAuthority.t()} | {:error, Error.t()}
-  def load_root_ca(ca_pem, key_pem) do
-    op = :load_root_ca
-
-    with :ok <- validate_pem_cert(ca_pem),
-         :ok <- validate_pem_key(key_pem),
-         :ok <- verify_key_matches_cert(ca_pem, key_pem) do
-      {:ok, %CertificateAuthority{certificate: ca_pem, private_key: key_pem}}
-    else
-      {:error, reason} when is_binary(reason) ->
-        {:error, %Error{message: reason, op: op}}
-
-      error ->
-        {:error, %Error{message: inspect(error), op: op, err: error}}
-    end
-  end
-
-  @spec create_csr_certificate(CertConfig.t()) :: {:ok, CSRCertificate.t()} | {:error, Error.t()}
-  def create_csr_certificate(%CertConfig{} = config) do
-    op = :create_csr
-
-    with :ok <- CertConfig.validate(config, :csr),
-         {:ok, priv_key_pem} <- generate_and_encode_ed25519_key(),
-         {:ok, csr_pem} <- create_csr(config, priv_key_pem),
-         {:ok, pub_key_pem} <- extract_public_key(priv_key_pem) do
-      {:ok, %CSRCertificate{csr: csr_pem, private_key: priv_key_pem, public_key: pub_key_pem}}
-    else
-      {:error, reason} when is_binary(reason) ->
-        {:error, %Error{message: reason, op: op}}
-
-      error ->
-        {:error, %Error{message: inspect(error), op: op, err: error}}
-    end
-  end
-
-  @spec sign_csr(CertificateAuthority.t(), binary(), integer()) ::
-          {:ok, binary()} | {:error, Error.t()}
-  def sign_csr(%CertificateAuthority{} = ca, csr_pem, validity_days) do
-    op = :sign_csr
-
-    with :ok <- validate_pem_csr(csr_pem),
-         {:ok, cert_pem} <- sign_csr_with_openssl(ca, csr_pem, validity_days) do
-      {:ok, cert_pem}
-    else
-      {:error, reason} when is_binary(reason) ->
-        {:error, %Error{message: reason, op: op}}
-
-      error ->
-        {:error, %Error{message: inspect(error), op: op, err: error}}
-    end
-  end
-
-  # ============================================================================
-  # Internal Helpers - Key Generation
-  # ============================================================================
-
-  defp generate_and_encode_ed25519_key do
-    try do
-      # Generate Ed25519 key pair using the crypto module
-      {_pub_key, priv_key} = :crypto.generate_key(:eddsa, :ed25519)
-
-      # Create an EC private key record for Ed25519
-      # The x509 library expects ec_private_key records with the ed25519 OID
-      # OID for id-Ed25519
-      oid_ed25519 = {1, 3, 101, 112}
-
-      ec_key =
-        {:ECPrivateKey, 1, priv_key, {:namedCurve, oid_ed25519}, :asn1_NOVALUE}
-
-      # Convert to PEM - x509 will wrap it in PKCS#8 automatically for Ed25519
-      priv_pem = X509.PrivateKey.to_pem(ec_key)
-      {:ok, priv_pem}
-    rescue
-      e -> {:error, "failed to generate Ed25519 key: #{inspect(e)}"}
-    end
-  end
-
-  defp create_self_signed_cert(config, priv_key_pem, validity_days) do
-    try do
-      private_key = X509.PrivateKey.from_pem!(priv_key_pem)
-      subject_rdn = config_to_rdn(config)
-
-      cert =
-        X509.Certificate.self_signed(
-          private_key,
-          subject_rdn,
-          template: :root_ca,
-          validity: validity_days
-        )
-
-      cert_pem = X509.Certificate.to_pem(cert)
-      {:ok, cert_pem}
-    rescue
-      e -> {:error, "failed to create self-signed certificate: #{inspect(e)}"}
-    end
-  end
-
-  defp create_csr(config, priv_key_pem) do
-    try do
-      private_key = X509.PrivateKey.from_pem!(priv_key_pem)
-      subject_rdn = config_to_rdn(config)
-
-      csr = X509.CSR.new(private_key, subject_rdn)
-      csr_pem = X509.CSR.to_pem(csr)
-      {:ok, csr_pem}
-    rescue
-      e -> {:error, "failed to create CSR: #{inspect(e)}"}
-    end
-  end
-
-  defp sign_csr_with_openssl(%CertificateAuthority{} = ca, csr_pem, validity_days) do
-    try do
-      ca_key = X509.PrivateKey.from_pem!(ca.private_key)
-      ca_cert = X509.Certificate.from_pem!(ca.certificate)
-      csr = X509.CSR.from_pem!(csr_pem)
-
-      cert =
-        csr
-        |> X509.CSR.public_key()
-        |> X509.Certificate.new(
-          X509.CSR.subject(csr),
-          ca_cert,
-          ca_key,
-          validity: validity_days
-        )
-
-      cert_pem = X509.Certificate.to_pem(cert)
-      {:ok, cert_pem}
-    rescue
-      e -> {:error, "failed to sign CSR: #{inspect(e)}"}
-    end
-  end
-
-  defp extract_public_key(priv_key_pem) do
-    try do
-      private_key = X509.PrivateKey.from_pem!(priv_key_pem)
+  def create_root_ca(config) do
+    certificate = fn ->
+      private_key = X509.PrivateKey.new_ec(@key_curve)
       public_key = X509.PublicKey.derive(private_key)
-      pub_pem = X509.PublicKey.to_pem(public_key)
-      {:ok, pub_pem}
-    rescue
-      e -> {:error, "failed to extract public key: #{inspect(e)}"}
+      rdn = CertConfig.to_rdn(config)
+      serial = :crypto.strong_rand_bytes(16) |> :crypto.bytes_to_integer()
+      validity = X509.Certificate.Validity.days_from_now(@root_ca_validity_days)
+
+      certificate =
+        X509.Certificate.self_signed(private_key, rdn,
+          template: :root_ca,
+          serial: serial,
+          validity: validity
+        )
+
+      certificate_pem = X509.Certificate.to_pem(certificate)
+      private_key_pem = X509.PrivateKey.to_pem(private_key)
+
+      %CertificateAuthority{
+        certificate: certificate_pem,
+        private_key: private_key_pem
+      }
+    end
+
+    with :ok <- CertConfig.validate(config, :root_ca) do
+      {:ok, certificate.()}
     end
   end
 
-  # ============================================================================
-  # Helper Functions
-  # ============================================================================
-
-  # ============================================================================
-  # DN Handling
-  # ============================================================================
-
-  defp config_to_rdn(config) do
-    # Build a name string compatible with x509
-    # Format: "/C=.../ST=.../L=.../O=.../OU=.../STREET=.../postalCode=.../CN=..."
-    parts = []
-
-    parts = if config.country, do: parts ++ ["C=#{config.country}"], else: parts
-    parts = if config.province, do: parts ++ ["ST=#{config.province}"], else: parts
-    parts = if config.locality, do: parts ++ ["L=#{config.locality}"], else: parts
-    parts = if config.organization, do: parts ++ ["O=#{config.organization}"], else: parts
-
-    parts =
-      if config.organizational_unit,
-        do: parts ++ ["OU=#{config.organizational_unit}"],
-        else: parts
-
-    parts =
-      if config.street_address, do: parts ++ ["STREET=#{config.street_address}"], else: parts
-
-    parts = if config.postal_code, do: parts ++ ["postalCode=#{config.postal_code}"], else: parts
-    parts = if config.common_name, do: parts ++ ["CN=#{config.common_name}"], else: parts
-
-    "/" <> Enum.join(parts, "/")
+  def create_csr(config) do
   end
 
-  # ============================================================================
-  # Validation Helpers
-  # ============================================================================
-
-  defp verify_key_matches_cert(cert_pem, key_pem) do
-    try do
-      private_key = X509.PrivateKey.from_pem!(key_pem)
-      cert = X509.Certificate.from_pem!(cert_pem)
-
-      pub_key_from_key = X509.PublicKey.derive(private_key)
-      pub_key_from_cert = X509.Certificate.public_key(cert)
-
-      # Compare the DER-encoded representations
-      if X509.PublicKey.to_der(pub_key_from_key) == X509.PublicKey.to_der(pub_key_from_cert) do
-        :ok
-      else
-        {:error, "private key does not match certificate"}
-      end
-    rescue
-      e -> {:error, "failed to verify key matches cert: #{inspect(e)}"}
-    end
-  end
-
-  defp validate_pem_cert(pem) when is_binary(pem) do
-    if String.contains?(pem, "-----BEGIN CERTIFICATE-----") and
-         String.contains?(pem, "-----END CERTIFICATE-----") do
-      :ok
-    else
-      {:error, "invalid certificate PEM format"}
-    end
-  end
-
-  defp validate_pem_csr(pem) when is_binary(pem) do
-    if String.contains?(pem, "-----BEGIN CERTIFICATE REQUEST-----") and
-         String.contains?(pem, "-----END CERTIFICATE REQUEST-----") do
-      :ok
-    else
-      {:error, "invalid CSR PEM format"}
-    end
-  end
-
-  defp validate_pem_key(pem) when is_binary(pem) do
-    if String.contains?(pem, "-----BEGIN PRIVATE KEY-----") and
-         String.contains?(pem, "-----END PRIVATE KEY-----") do
-      :ok
-    else
-      {:error, "invalid private key PEM format"}
-    end
+  def sign_csr(csr_perm, certificate_authority, validity_days) do
   end
 end
