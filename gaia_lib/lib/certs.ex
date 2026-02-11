@@ -235,7 +235,7 @@ defmodule GaiaLib.Certs do
   Returns `:ok` when every PEM block decodes as base64, otherwise returns
   `{:error, reason}` describing the failure.
   """
-  @spec validate_pem_armor(binary()) :: :ok | {:error, t()}
+  @spec validate_pem_armor(binary()) :: :ok | {:error, PEMError.t()}
   def validate_pem_armor(pem) do
     pem
     |> String.trim()
