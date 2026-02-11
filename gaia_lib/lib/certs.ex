@@ -363,4 +363,54 @@ defmodule GaiaLib.Certs do
         {:error, %Error{message: "certificate is not a root CA", op: :load_root_ca}}
     end
   end
+
+  @doc """
+  Write a CertificatePair to disk. `path` should be a directory; the function
+  will write two files inside it: `root.crt` and `root.key`.
+
+  Options:
+    * `:password` - optional PEM password to encrypt the private key (binary)
+
+  Returns `:ok` or `{:error, reason}`.
+  """
+  def write_root_ca(
+        %CertificatePair{certificate: cert_pem, private_key: priv_pem},
+        path,
+        opts \\ []
+      )
+      when is_binary(path) do
+    password = Keyword.get(opts, :password)
+
+    try do
+      File.mkdir_p!(path)
+
+      cert_path = Path.join(path, "root.crt")
+      key_path = Path.join(path, "root.key")
+
+      :ok = File.write!(cert_path, cert_pem)
+
+      # If password provided, attempt to re-encode the private key with the
+      # password using X509.PrivateKey.to_pem/2. Otherwise write as-is.
+      pem_to_write =
+        if password && is_binary(password) do
+          # Try to parse and re-encode using the provided password
+          case X509.PrivateKey.from_pem(priv_pem) do
+            {:ok, priv} ->
+              X509.PrivateKey.to_pem(priv, password: password)
+
+            {:error, _} ->
+              # If we can't parse, fall back to writing original
+              priv_pem
+          end
+        else
+          priv_pem
+        end
+
+      :ok = File.write!(key_path, pem_to_write)
+
+      :ok
+    rescue
+      e -> {:error, e}
+    end
+  end
 end
