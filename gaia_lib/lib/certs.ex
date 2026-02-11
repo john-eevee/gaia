@@ -225,7 +225,7 @@ defmodule GaiaLib.Certs do
     end
   end
 
-  def sign_csr(csr_perm, certificate_authority, validity_days) do
+  def sign_csr(csr_perm, root_ca, validity_days) do
   end
 
   @doc """
