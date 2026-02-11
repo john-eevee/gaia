@@ -2,7 +2,10 @@ defmodule GaiaLib.CertsTest do
   use ExUnit.Case
 
   alias GaiaLib.Certs
-  alias GaiaLib.Certs.{CertificateAuthority, CSRCertificate, CertConfig, Error}
+  # Map historical test names to current module names in `lib/certs.ex`.
+  alias GaiaLib.Certs.{CertificatePair, CSRCertificate, CertConfig, ConfigValidationError}
+  alias GaiaLib.Certs.CertificatePair, as: CertificateAuthority
+  alias GaiaLib.Certs.ConfigValidationError, as: Error
 
   describe "CertConfig.validate/2 - root_ca" do
     test "returns :ok with valid root CA config" do
