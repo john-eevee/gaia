@@ -324,4 +324,43 @@ defmodule GaiaLib.Certs do
         {:error, %Error{message: "certificate is not a root CA", op: :load_root_ca}}
     end
   end
+
+  @doc """
+  Like `load_root_ca/2` but accepts an optional password for encrypted
+  private key PEMs. The password should be a binary (UTF-8) or nil.
+  Returns `{:ok, %CertificatePair{}}` or `{:error, %Error{}}`.
+  """
+  def load_root_ca(cert_pem_or_der, priv_pem_or_der, password) do
+    cert_result =
+      case X509.Certificate.from_pem(cert_pem_or_der) do
+        {:ok, cert} -> {:ok, cert}
+        {:error, _} -> X509.Certificate.from_der(cert_pem_or_der)
+      end
+
+    priv_result =
+      case X509.PrivateKey.from_pem(priv_pem_or_der, password: password) do
+        {:ok, priv} -> {:ok, priv}
+        {:error, _} -> X509.PrivateKey.from_der(priv_pem_or_der)
+      end
+
+    with {:ok, cert} <- cert_result,
+         {:ok, priv} <- priv_result,
+         true <- CertsValidation.root_ca?(cert),
+         true <- CertsValidation.certificate_matches_private_key?(cert, priv) do
+      {:ok,
+       %CertificatePair{
+         certificate: X509.Certificate.to_pem(cert),
+         private_key: X509.PrivateKey.to_pem(priv)
+       }}
+    else
+      {:error, _} = err ->
+        {:error, %Error{message: "Invalid certificate or key", op: :load_root_ca, err: err}}
+
+      false ->
+        {:error, %Error{message: "private key does not match", op: :load_root_ca}}
+
+      _ ->
+        {:error, %Error{message: "certificate is not a root CA", op: :load_root_ca}}
+    end
+  end
 end
