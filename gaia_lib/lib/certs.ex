@@ -5,7 +5,7 @@ defmodule GaiaLib.Certs do
   """
 
   alias GaiaLib.Certs.{
-    CertificateAuthority,
+    CertificatePair,
     CSRCertificate,
     CertConfig,
     ConfigValidationError,
@@ -15,7 +15,7 @@ defmodule GaiaLib.Certs do
   @root_ca_validity_days 3650
   @key_curve :ed25519
 
-  defmodule CertificateAuthority do
+  defmodule CertificatePair do
     @moduledoc """
     Represents a Certificate Authority (CA) with its certificate and private key.
      - `certificate`: PEM-encoded CA certificate
@@ -27,12 +27,12 @@ defmodule GaiaLib.Certs do
     defimpl Inspect do
       import Inspect.Algebra
 
-      def inspect(%CertificateAuthority{} = ca, opts) do
+      def inspect(%CertificatePair{} = ca, opts) do
         private_key = if ca.private_key, do: "[REDACTED]", else: "nil"
         certificate = if ca.certificate, do: "[REDACTED]", else: "nil"
 
         {concat([
-           "CertificateAuthority<private_key: ",
+           "CertificatePair<private_key: ",
            private_key,
            ", certificate: ",
            certificate,
@@ -199,7 +199,7 @@ defmodule GaiaLib.Certs do
       certificate_pem = X509.Certificate.to_pem(certificate)
       private_key_pem = X509.PrivateKey.to_pem(private_key)
 
-      %CertificateAuthority{
+      %CertificatePair{
         certificate: certificate_pem,
         private_key: private_key_pem
       }
@@ -217,7 +217,7 @@ defmodule GaiaLib.Certs do
       csr = X509.CSR.new(private_key, rdn)
       csr_pem = X509.CSR.to_pem(csr)
       private_key_pem = X509.PrivateKey.to_pem(private_key)
-      %CertificateAuthority{certificate: csr_pem, private_key: private_key_pem}
+      %CertificatePair{certificate: csr_pem, private_key: private_key_pem}
     end
 
     with :ok <- CertConfig.validate(config, :csr) do
@@ -274,7 +274,7 @@ defmodule GaiaLib.Certs do
               {:ok, _} ->
                 {:halt,
                  {:error,
-                  %PEM{
+                  %PEMError{
                     message: "Invalid PEM: block #{label} decodes to empty binary",
                     label: label,
                     reason: :empty_decoded
@@ -283,7 +283,7 @@ defmodule GaiaLib.Certs do
               :error ->
                 {:halt,
                  {:error,
-                  %PEM{
+                  %PEMError{
                     message: "Invalid PEM: base64 decode failed for block #{label}",
                     label: label,
                     reason: :base64_decode_failed
