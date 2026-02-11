@@ -45,18 +45,16 @@ defmodule GaiaLib.CertsValidation do
 
   # Try to normalize input into an OTP certificate record using X509 helpers
   defp ensure_cert(cert) when is_binary(cert) do
-    cond do
-      String.contains?(cert, "-----BEGIN") ->
-        case X509.Certificate.from_pem(cert) do
-          {:ok, c} -> {:ok, c}
-          {:error, _} -> {:error, :invalid_pem}
-        end
-
-      true ->
-        case X509.Certificate.from_der(cert) do
-          {:ok, c} -> {:ok, c}
-          {:error, _} -> {:error, :invalid_der}
-        end
+    if String.contains?(cert, "-----BEGIN") do
+      case X509.Certificate.from_pem(cert) do
+        {:ok, c} -> {:ok, c}
+        {:error, _} -> {:error, :invalid_pem}
+      end
+    else
+      case X509.Certificate.from_der(cert) do
+        {:ok, c} -> {:ok, c}
+        {:error, _} -> {:error, :invalid_der}
+      end
     end
   end
 
@@ -69,33 +67,37 @@ defmodule GaiaLib.CertsValidation do
         false
 
       {:Extension, _oid, _critical, value} ->
-        # value may already be decoded or still be DER-encoded depending on
-        # OTP/X509 versions; try to decode when it's a binary.
-        decoded =
-          cond do
-            is_binary(value) ->
-              try do
-                :public_key.der_decode(:BasicConstraints, value)
-              rescue
-                _ -> value
-              end
-
-            true ->
-              value
-          end
-
-        case decoded do
-          {:BasicConstraints, true, _path} -> true
-          {:BasicConstraints, true} -> true
-          {true, _path} -> true
-          true -> true
-          _ -> false
-        end
+        value
+        |> decode_basic_constraints()
+        |> basic_constraints_decoded?()
 
       _ ->
         false
     end
   end
+
+  defp decode_basic_constraints(value) when is_binary(value) do
+    case safe_der_decode(value, :BasicConstraints) do
+      {:ok, decoded} -> decoded
+      :error -> value
+    end
+  end
+
+  defp decode_basic_constraints(value), do: value
+
+  defp safe_der_decode(bin, type) do
+    try do
+      {:ok, :public_key.der_decode(type, bin)}
+    rescue
+      _ -> :error
+    end
+  end
+
+  defp basic_constraints_decoded?({:BasicConstraints, true, _path}), do: true
+  defp basic_constraints_decoded?({:BasicConstraints, true}), do: true
+  defp basic_constraints_decoded?({true, _path}), do: true
+  defp basic_constraints_decoded?(true), do: true
+  defp basic_constraints_decoded?(_), do: false
 
   # If keyUsage is present, require keyCertSign or cRLSign; otherwise allow.
   defp key_usage_allows_ca?(cert) do
@@ -136,39 +138,38 @@ defmodule GaiaLib.CertsValidation do
         {:error, %PEMError{message: "Invalid PEM: no PEM armor found", reason: :no_armor}}
 
       matches ->
-        Enum.reduce_while(matches, :ok, fn
-          [_, label, body], _acc ->
-            # Remove header lines (e.g. "Proc-Type: 4,ENCRYPTED") and
-            # join the remaining lines into a contiguous base64 string.
-            base64 =
-              body
-              |> String.split(~r/\r?\n/)
-              |> Enum.reject(&String.contains?(&1, ":"))
-              |> Enum.join()
-              |> String.replace(~r/\s+/, "")
+        matches
+        |> Enum.map(fn [_, label, body] ->
+          base64 =
+            body
+            |> String.split(~r/\r?\n/)
+            |> Enum.reject(&String.contains?(&1, ":"))
+            |> Enum.join()
+            |> String.replace(~r/\s+/, "")
 
-            case Base.decode64(base64) do
-              {:ok, decoded} when byte_size(decoded) > 0 ->
-                {:cont, :ok}
+          {label, Base.decode64(base64)}
+        end)
+        |> Enum.reduce_while(:ok, fn
+          {label, {:ok, decoded}}, _acc when byte_size(decoded) > 0 ->
+            {:cont, :ok}
 
-              {:ok, _} ->
-                {:halt,
-                 {:error,
-                  %PEMError{
-                    message: "Invalid PEM: block #{label} decodes to empty binary",
-                    label: label,
-                    reason: :empty_decoded
-                  }}}
+          {label, {:ok, _}}, _acc ->
+            {:halt,
+             {:error,
+              %PEMError{
+                message: "Invalid PEM: block #{label} decodes to empty binary",
+                label: label,
+                reason: :empty_decoded
+              }}}
 
-              :error ->
-                {:halt,
-                 {:error,
-                  %PEMError{
-                    message: "Invalid PEM: base64 decode failed for block #{label}",
-                    label: label,
-                    reason: :base64_decode_failed
-                  }}}
-            end
+          {label, :error}, _acc ->
+            {:halt,
+             {:error,
+              %PEMError{
+                message: "Invalid PEM: base64 decode failed for block #{label}",
+                label: label,
+                reason: :base64_decode_failed
+              }}}
         end)
     end
   end
@@ -194,18 +195,16 @@ defmodule GaiaLib.CertsValidation do
 
   # Normalize various private key inputs into an OTP private key structure
   defp ensure_private_key(key) when is_binary(key) do
-    cond do
-      String.contains?(key, "-----BEGIN") ->
-        case X509.PrivateKey.from_pem(key) do
-          {:ok, k} -> {:ok, k}
-          {:error, _} -> {:error, :invalid_pem}
-        end
-
-      true ->
-        case X509.PrivateKey.from_der(key) do
-          {:ok, k} -> {:ok, k}
-          {:error, _} -> {:error, :invalid_der}
-        end
+    if String.contains?(key, "-----BEGIN") do
+      case X509.PrivateKey.from_pem(key) do
+        {:ok, k} -> {:ok, k}
+        {:error, _} -> {:error, :invalid_pem}
+      end
+    else
+      case X509.PrivateKey.from_der(key) do
+        {:ok, k} -> {:ok, k}
+        {:error, _} -> {:error, :invalid_der}
+      end
     end
   end
 

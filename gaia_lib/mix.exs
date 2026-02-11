@@ -34,7 +34,8 @@ defmodule GaiaLib.MixProject do
 
   defp aliases() do
     [
-      setup: ["deps.get"]
+      setup: ["deps.get"],
+      "test.integration": ["test --only integration"]
     ]
   end
 end
