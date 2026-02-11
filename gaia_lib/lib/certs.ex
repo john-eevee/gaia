@@ -15,10 +15,7 @@ defmodule GaiaLib.Certs do
      - `certificate`: PEM-encoded CA certificate
      - `private_key`: PEM-encoded private key corresponding to the CA certificate
     """
-    @type t :: %__MODULE__{
-            private_key: binary(),
-            certificate: binary()
-          }
+    @type t :: %__MODULE__{private_key: binary(), certificate: binary()}
     defstruct [:private_key, :certificate]
 
     defimpl Inspect do
@@ -36,6 +33,57 @@ defmodule GaiaLib.Certs do
            ">"
          ]), opts}
       end
+    end
+  end
+
+  @doc """
+  Validate that the given string is PEM armored.
+
+  Accepts one or more PEM blocks (for example a cert chain or key + cert).
+  Returns `:ok` when every PEM block decodes as base64, otherwise returns
+  `{:error, reason}` describing the failure.
+  """
+  @spec validate_pem_armor(binary()) :: :ok | {:error, String.t()}
+  def validate_pem_armor(pem) when is_binary(pem) do
+    pem = String.trim(pem || "")
+
+    cond do
+      pem == "" ->
+        {:error, "PEM string is empty"}
+
+      true ->
+        # Matches blocks like:
+        # -----BEGIN TYPE-----\n(base64 or optional headers)\n-----END TYPE-----
+        regex = ~r/-----BEGIN ([A-Za-z0-9 _-]+)-----(?:\r?\n)(.*?)(?:\r?\n)-----END \1-----/s
+
+        case Regex.scan(regex, pem) do
+          [] ->
+            {:error, "Invalid PEM: no PEM armor found"}
+
+          matches ->
+            Enum.reduce_while(matches, :ok, fn
+              [_, label, body], _acc ->
+                # Remove header lines (e.g. "Proc-Type: 4,ENCRYPTED") and
+                # join the remaining lines into a contiguous base64 string.
+                base64 =
+                  body
+                  |> String.split(~r/\r?\n/)
+                  |> Enum.reject(&String.contains?(&1, ":"))
+                  |> Enum.join()
+                  |> String.replace(~r/\s+/, "")
+
+                case Base.decode64(base64) do
+                  {:ok, decoded} when byte_size(decoded) > 0 ->
+                    {:cont, :ok}
+
+                  {:ok, _} ->
+                    {:halt, {:error, "Invalid PEM: block #{label} decodes to empty binary"}}
+
+                  :error ->
+                    {:halt, {:error, "Invalid PEM: base64 decode failed for block #{label}"}}
+                end
+            end)
+        end
     end
   end
 
@@ -178,6 +226,18 @@ defmodule GaiaLib.Certs do
   end
 
   def create_csr(config) do
+    csr = fn ->
+      private_key = X509.PrivateKey.new_ec(@key_curve)
+      rdn = CertConfig.to_rdn(config)
+      csr = X509.CSR.new(private_key, rdn)
+      csr_pem = X509.CSR.to_pem(csr)
+      private_key_pem = X509.PrivateKey.to_pem(private_key)
+      %CertificateAuthority{certificate: csr_pem, private_key: private_key_pem}
+    end
+
+    with :ok <- CertConfig.validate(config, :csr) do
+      {:ok, csr.()}
+    end
   end
 
   def sign_csr(csr_perm, certificate_authority, validity_days) do
