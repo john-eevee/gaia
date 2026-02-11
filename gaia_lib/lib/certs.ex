@@ -8,9 +8,10 @@ defmodule GaiaLib.Certs do
     CertificatePair,
     CSRCertificate,
     CertConfig,
-    ConfigValidationError,
-    PEMError
+    ConfigValidationError
   }
+
+  alias GaiaLib.CertsValidation
 
   @root_ca_validity_days 3650
   @key_curve :ed25519
@@ -56,19 +57,20 @@ defmodule GaiaLib.Certs do
     def message(%__MODULE__{message: msg}), do: msg
   end
 
-  defmodule PEMError do
+  defmodule Error do
     @moduledoc """
-    related to PEM parsing/decoding.
+    Generic error used by certs APIs in tests.
     Fields:
       - `message`: human readable description
-      - `label`: optional PEM block label (e.g. CERTIFICATE)
-      - `reason`: internal atom describing the failure
+      - `op`: the operation that failed
+      - `err`: optional internal error
     """
-    defexception [:message, :label, :reason]
+    defexception [:message, :op, :err]
 
-    @type t :: %__MODULE__{message: String.t(), label: String.t() | nil, reason: atom() | any()}
+    @type t :: %__MODULE__{message: String.t(), op: atom() | nil, err: any() | nil}
 
-    def message(%__MODULE__{message: msg}), do: msg
+    def message(%__MODULE__{message: msg, err: nil}), do: msg
+    def message(%__MODULE__{message: msg, err: err}), do: "#{msg} - #{inspect(err)}"
   end
 
   defmodule CertConfig do
@@ -99,20 +101,10 @@ defmodule GaiaLib.Certs do
     def validate(config, type = :root_ca) do
       cond do
         is_nil(config.organization) or config.organization == "" ->
-          {:error,
-           %ConfigValidationError{
-             message: "Config validation failed: Organization is required for Root CA",
-             field: :organization,
-             op: type
-           }}
+          {:error, "Config validation failed: Organization is required for Root CA"}
 
         is_nil(config.country) or config.country == "" ->
-          {:error,
-           %ConfigValidationError{
-             message: "Config validation failed: Country is required for Root CA",
-             field: :country,
-             op: type
-           }}
+          {:error, "Config validation failed: Country is required for Root CA"}
 
         true ->
           :ok
@@ -124,33 +116,32 @@ defmodule GaiaLib.Certs do
       no_organization = is_nil(config.organization) or config.organization == ""
 
       if no_common_name and no_organization do
-        {:error,
-         %ConfigValidationError{
-           message: "Config validation failed: CSR requires either Common Name or Organization",
-           field: nil,
-           op: type
-         }}
+        {:error, "Config validation failed: CSR requires either Common Name or Organization"}
       else
         :ok
       end
     end
 
     def to_rdn(config) do
-      rnd_string =
+      # Only include attribute keys supported by X509.RDNSequence.new_attr/1
+      allowed = ["O", "OU", "C", "ST", "L", "CN"]
+
+      rnd_items =
         [
           {"O", config.organization},
           {"OU", config.organizational_unit},
           {"C", config.country},
           {"ST", config.province},
           {"L", config.locality},
-          {"STREET", config.street_address},
-          {"PC", config.postal_code},
           {"CN", config.common_name}
         ]
         |> Enum.filter(fn {_k, v} -> not is_nil(v) and v != "" end)
-        |> Enum.map_join("/", fn {k, v} -> "#{k}=#{v}" end)
+        |> Enum.filter(fn {k, _v} -> k in allowed end)
 
-      "/" <> rnd_string
+      case rnd_items do
+        [] -> "/"
+        _ -> "/" <> Enum.map_join(rnd_items, "/", fn {k, v} -> "#{k}=#{v}" end)
+      end
     end
   end
 
@@ -193,7 +184,14 @@ defmodule GaiaLib.Certs do
         X509.Certificate.self_signed(private_key, rdn,
           template: :root_ca,
           serial: serial,
-          validity: validity
+          validity: validity,
+          extensions: [
+            basic_constraints: X509.Certificate.Extension.basic_constraints(true),
+            key_usage:
+              X509.Certificate.Extension.key_usage([:digitalSignature, :keyCertSign, :cRLSign]),
+            subject_key_identifier: true,
+            authority_key_identifier: true
+          ]
         )
 
       certificate_pem = X509.Certificate.to_pem(certificate)
@@ -205,91 +203,124 @@ defmodule GaiaLib.Certs do
       }
     end
 
-    with :ok <- CertConfig.validate(config, :root_ca) do
-      {:ok, certificate.()}
+    case CertConfig.validate(config, :root_ca) do
+      :ok ->
+        {:ok, certificate.()}
+
+      {:error, msg} ->
+        {:error, %Error{message: msg, op: :create_root_ca}}
     end
   end
 
   def create_csr(config) do
-    csr = fn ->
+    csr_fun = fn ->
       private_key = X509.PrivateKey.new_ec(@key_curve)
       rdn = CertConfig.to_rdn(config)
       csr = X509.CSR.new(private_key, rdn)
       csr_pem = X509.CSR.to_pem(csr)
       private_key_pem = X509.PrivateKey.to_pem(private_key)
-      %CertificatePair{certificate: csr_pem, private_key: private_key_pem}
+
+      # Extract public key and encode to PEM
+      pub = X509.CSR.public_key(csr)
+      pub_der = :public_key.der_encode(:SubjectPublicKeyInfo, pub)
+
+      pub_pem =
+        "-----BEGIN PUBLIC KEY-----\n" <>
+          (Base.encode64(pub_der, line_length: 64) <> "\n") <>
+          "-----END PUBLIC KEY-----\n"
+
+      %CSRCertificate{csr: csr_pem, private_key: private_key_pem, public_key: pub_pem}
     end
 
-    with :ok <- CertConfig.validate(config, :csr) do
-      {:ok, csr.()}
+    case CertConfig.validate(config, :csr) do
+      :ok -> {:ok, csr_fun.()}
+      {:error, msg} -> {:error, %Error{message: msg, op: :create_csr}}
     end
-  end
-
-  def sign_csr(csr_perm, root_ca, validity_days) do
   end
 
   @doc """
-  Validate that the given string is PEM armored.
+  Sign a CSR using the given root CA pair.
 
-  Accepts one or more PEM blocks (for example a cert chain or key + cert).
-  Returns `:ok` when every PEM block decodes as base64, otherwise returns
-  `{:error, reason}` describing the failure.
+  `root_ca` must be a map/struct with `:certificate` and `:private_key` fields
+  (the same shape returned by `create_root_ca/1`). `csr_pem` is a CSR PEM
+  string. Returns `{:ok, cert_pem}` on success or `{:error, %Error{}}` on
+  failure.
   """
-  @spec validate_pem_armor(binary()) :: :ok | {:error, PEMError.t()}
-  def validate_pem_armor(pem) do
-    pem
-    |> String.trim()
-    |> do_validate_pem_armor()
+  def sign_csr(csr_pem, root_ca, validity_days) when is_binary(csr_pem) do
+    # Parse CSR
+    with {:ok, csr} <- X509.CSR.from_pem(csr_pem),
+         %{certificate: certificate_pem, private_key: private_key_pem} <- root_ca,
+         {:ok, ca_cert} <- X509.Certificate.from_pem(certificate_pem),
+         {:ok, ca_priv} <- X509.PrivateKey.from_pem(private_key_pem),
+         true <- CertsValidation.root_ca?(ca_cert),
+         true <- CertsValidation.certificate_matches_private_key?(ca_cert, ca_priv) do
+      pub = X509.CSR.public_key(csr)
+      subject = X509.CSR.subject(csr)
+      serial = :crypto.strong_rand_bytes(16) |> :crypto.bytes_to_integer()
+      validity = X509.Certificate.Validity.days_from_now(validity_days)
+
+      cert =
+        X509.Certificate.new(pub, subject, ca_cert, ca_priv,
+          template: :server,
+          serial: serial,
+          validity: validity
+        )
+
+      {:ok, X509.Certificate.to_pem(cert)}
+    else
+      {:error, {:malformed, _}} = err ->
+        {:error, %Error{message: "Invalid CSR PEM", op: :sign_csr, err: err}}
+
+      {:error, reason} ->
+        {:error, %Error{message: "Sign CSR failed", op: :sign_csr, err: reason}}
+
+      false ->
+        {:error, %Error{message: "private key does not match", op: :sign_csr}}
+
+      _ ->
+        {:error, %Error{message: "invalid ca", op: :sign_csr}}
+    end
   end
 
-  defp do_validate_pem_armor("") do
-    {:error, %PEMError{message: "PEM is empty", reason: :empty}}
-  end
+  def sign_csr(_, _, _), do: {:error, %Error{message: "invalid csr", op: :sign_csr}}
 
-  defp do_validate_pem_armor(pem) when is_binary(pem) do
-    # Matches blocks like:
-    # -----BEGIN TYPE-----\n(base64 or optional headers)\n-----END TYPE-----
-    regex = ~r/-----BEGIN ([A-Za-z0-9 _-]+)-----(?:\r?\n)(.*?)(?:\r?\n)-----END \1-----/s
+  @doc """
+  Load and validate a root CA from PEMs or der/binary inputs.
 
-    case Regex.scan(regex, pem) do
-      [] ->
-        {:error, %PEMError{message: "Invalid PEM: no PEM armor found", reason: :no_armor}}
+  Returns `{:ok, %CertificatePair{}}` when validation succeeds or
+  `{:error, %Error{}}` when it fails.
+  """
+  def load_root_ca(cert_pem_or_der, priv_pem_or_der) do
+    cert_result =
+      case X509.Certificate.from_pem(cert_pem_or_der) do
+        {:ok, cert} -> {:ok, cert}
+        {:error, _} -> X509.Certificate.from_der(cert_pem_or_der)
+      end
 
-      matches ->
-        Enum.reduce_while(matches, :ok, fn
-          [_, label, body], _acc ->
-            # Remove header lines (e.g. "Proc-Type: 4,ENCRYPTED") and
-            # join the remaining lines into a contiguous base64 string.
-            base64 =
-              body
-              |> String.split(~r/\r?\n/)
-              |> Enum.reject(&String.contains?(&1, ":"))
-              |> Enum.join()
-              |> String.replace(~r/\s+/, "")
+    priv_result =
+      case X509.PrivateKey.from_pem(priv_pem_or_der) do
+        {:ok, priv} -> {:ok, priv}
+        {:error, _} -> X509.PrivateKey.from_der(priv_pem_or_der)
+      end
 
-            case Base.decode64(base64) do
-              {:ok, decoded} when byte_size(decoded) > 0 ->
-                {:cont, :ok}
+    with {:ok, cert} <- cert_result,
+         {:ok, priv} <- priv_result,
+         true <- CertsValidation.root_ca?(cert),
+         true <- CertsValidation.certificate_matches_private_key?(cert, priv) do
+      {:ok,
+       %CertificatePair{
+         certificate: X509.Certificate.to_pem(cert),
+         private_key: X509.PrivateKey.to_pem(priv)
+       }}
+    else
+      {:error, _} = err ->
+        {:error, %Error{message: "Invalid certificate or key", op: :load_root_ca, err: err}}
 
-              {:ok, _} ->
-                {:halt,
-                 {:error,
-                  %PEMError{
-                    message: "Invalid PEM: block #{label} decodes to empty binary",
-                    label: label,
-                    reason: :empty_decoded
-                  }}}
+      false ->
+        {:error, %Error{message: "private key does not match", op: :load_root_ca}}
 
-              :error ->
-                {:halt,
-                 {:error,
-                  %PEMError{
-                    message: "Invalid PEM: base64 decode failed for block #{label}",
-                    label: label,
-                    reason: :base64_decode_failed
-                  }}}
-            end
-        end)
+      _ ->
+        {:error, %Error{message: "certificate is not a root CA", op: :load_root_ca}}
     end
   end
 end
