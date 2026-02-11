@@ -4,7 +4,13 @@ defmodule GaiaLib.Certs do
   and sign certificates using Ed25519 keys via the x509 library.
   """
 
-  alias GaiaLib.Certs.{CertificateAuthority, CSRCertificate, CertConfig, Error}
+  alias GaiaLib.Certs.{
+    CertificateAuthority,
+    CSRCertificate,
+    CertConfig,
+    ConfigValidationError,
+    PEMError
+  }
 
   @root_ca_validity_days 3650
   @key_curve :ed25519
@@ -36,6 +42,35 @@ defmodule GaiaLib.Certs do
     end
   end
 
+  defmodule ConfigValidationError do
+    @moduledoc """
+    raised when a certificate configuration fails validation.
+    Fields:
+      - `message`: human readable description
+      - `field`: the field that failed validation (if known)
+    """
+    defexception [:message, :field, :op]
+
+    @type t :: %__MODULE__{message: String.t(), field: atom() | nil}
+
+    def message(%__MODULE__{message: msg}), do: msg
+  end
+
+  defmodule PEMError do
+    @moduledoc """
+    related to PEM parsing/decoding.
+    Fields:
+      - `message`: human readable description
+      - `label`: optional PEM block label (e.g. CERTIFICATE)
+      - `reason`: internal atom describing the failure
+    """
+    defexception [:message, :label, :reason]
+
+    @type t :: %__MODULE__{message: String.t(), label: String.t() | nil, reason: atom() | any()}
+
+    def message(%__MODULE__{message: msg}), do: msg
+  end
+
   defmodule CertConfig do
     @moduledoc """
     Configuration for generating certificates and CSRs.
@@ -61,40 +96,40 @@ defmodule GaiaLib.Certs do
       :common_name
     ]
 
-    def validate(config, :root_ca) do
+    def validate(config, type = :root_ca) do
       cond do
         is_nil(config.organization) or config.organization == "" ->
           {:error,
-           struct(Error.ConfigValidation,
+           %ConfigValidationError{
              message: "Config validation failed: Organization is required for Root CA",
              field: :organization,
-             op: :root_ca
-           )}
+             op: type
+           }}
 
         is_nil(config.country) or config.country == "" ->
           {:error,
-           struct(Error.ConfigValidation,
+           %ConfigValidationError{
              message: "Config validation failed: Country is required for Root CA",
              field: :country,
-             op: :root_ca
-           )}
+             op: type
+           }}
 
         true ->
           :ok
       end
     end
 
-    def validate(config, :csr) do
+    def validate(config, type = :csr) do
       no_common_name = is_nil(config.common_name) or config.common_name == ""
       no_organization = is_nil(config.organization) or config.organization == ""
 
       if no_common_name and no_organization do
         {:error,
-         struct(Error.ConfigValidation,
+         %ConfigValidationError{
            message: "Config validation failed: CSR requires either Common Name or Organization",
            field: nil,
-           op: :csr
-         )}
+           op: type
+         }}
       else
         :ok
       end
@@ -147,55 +182,9 @@ defmodule GaiaLib.Certs do
     end
   end
 
-  defmodule Error do
-    @moduledoc false
-
-    defmodule ConfigValidation do
-      @moduledoc """
-      Error raised when a certificate configuration fails validation.
-      Fields:
-        - `message`: human readable description
-        - `field`: the field that failed validation (if known)
-        - `op`: operation during which the error occurred
-      """
-      defexception [:message, :field, :op]
-
-      @type t :: %__MODULE__{message: String.t(), field: atom() | nil, op: atom() | nil}
-
-      def message(%__MODULE__{message: msg}), do: msg
-    end
-
-    defmodule PEM do
-      @moduledoc """
-      Error related to PEM parsing/decoding.
-      Fields:
-        - `message`: human readable description
-        - `label`: optional PEM block label (e.g. CERTIFICATE)
-        - `reason`: internal atom describing the failure
-      """
-      defexception [:message, :label, :reason]
-
-      @type t :: %__MODULE__{message: String.t(), label: String.t() | nil, reason: atom() | any()}
-
-      def message(%__MODULE__{message: msg}), do: msg
-    end
-
-    # keep a generic error shape for backwards compatibility
-    defexception [:message, :op, :err]
-
-    @type t ::
-            %__MODULE__{message: String.t(), op: atom() | nil, err: any()}
-            | ConfigValidation.t()
-            | PEM.t()
-
-    def message(%__MODULE__{message: msg, err: nil}), do: msg
-    def message(%__MODULE__{message: msg, err: err}), do: "#{msg}: #{inspect(err)}"
-  end
-
   def create_root_ca(config) do
     certificate = fn ->
       private_key = X509.PrivateKey.new_ec(@key_curve)
-      public_key = X509.PublicKey.derive(private_key)
       rdn = CertConfig.to_rdn(config)
       serial = :crypto.strong_rand_bytes(16) |> :crypto.bytes_to_integer()
       validity = X509.Certificate.Validity.days_from_now(@root_ca_validity_days)
@@ -246,7 +235,7 @@ defmodule GaiaLib.Certs do
   Returns `:ok` when every PEM block decodes as base64, otherwise returns
   `{:error, reason}` describing the failure.
   """
-  @spec validate_pem_armor(binary()) :: :ok | {:error, Error.t()}
+  @spec validate_pem_armor(binary()) :: :ok | {:error, t()}
   def validate_pem_armor(pem) do
     pem
     |> String.trim()
@@ -254,7 +243,7 @@ defmodule GaiaLib.Certs do
   end
 
   defp do_validate_pem_armor("") do
-    {:error, struct(Error.PEM, message: "PEM is empty", reason: :empty)}
+    {:error, %PEMError{message: "PEM is empty", reason: :empty}}
   end
 
   defp do_validate_pem_armor(pem) when is_binary(pem) do
@@ -264,7 +253,7 @@ defmodule GaiaLib.Certs do
 
     case Regex.scan(regex, pem) do
       [] ->
-        {:error, struct(Error.PEM, message: "Invalid PEM: no PEM armor found", reason: :no_armor)}
+        {:error, %PEMError{message: "Invalid PEM: no PEM armor found", reason: :no_armor}}
 
       matches ->
         Enum.reduce_while(matches, :ok, fn
@@ -285,20 +274,20 @@ defmodule GaiaLib.Certs do
               {:ok, _} ->
                 {:halt,
                  {:error,
-                  struct(Error.PEM,
+                  %PEM{
                     message: "Invalid PEM: block #{label} decodes to empty binary",
                     label: label,
                     reason: :empty_decoded
-                  )}}
+                  }}}
 
               :error ->
                 {:halt,
                  {:error,
-                  struct(Error.PEM,
+                  %PEM{
                     message: "Invalid PEM: base64 decode failed for block #{label}",
                     label: label,
                     reason: :base64_decode_failed
-                  )}}
+                  }}}
             end
         end)
     end
