@@ -387,26 +387,55 @@ defmodule GaiaLib.Certs do
       cert_path = Path.join(path, "root.crt")
       key_path = Path.join(path, "root.key")
 
-      :ok = File.write!(cert_path, cert_pem)
+      # Write atomically: write to a temp file then rename into place.
+      cert_tmp = cert_path <> ".tmp"
+      key_tmp = key_path <> ".tmp"
+
+      :ok = File.write!(cert_tmp, cert_pem)
+      File.rename!(cert_tmp, cert_path)
 
       # If password provided, attempt to re-encode the private key with the
       # password using X509.PrivateKey.to_pem/2. Otherwise write as-is.
       pem_to_write =
         if password && is_binary(password) do
-          # Try to parse and re-encode using the provided password
+          # If the private key is unencrypted we can parse and re-encode with
+          # the requested password. If it's already encrypted we try to
+          # recognize that and avoid corrupting it.
           case X509.PrivateKey.from_pem(priv_pem) do
             {:ok, priv} ->
               X509.PrivateKey.to_pem(priv, password: password)
 
             {:error, _} ->
-              # If we can't parse, fall back to writing original
-              priv_pem
+              # Perhaps the key is already encrypted. Try parsing with the
+              # provided password — if that succeeds the caller provided the
+              # same password and we can write the original PEM as-is. If not,
+              # fall back to writing the original blob unchanged.
+              case X509.PrivateKey.from_pem(priv_pem, password: password) do
+                {:ok, _priv} -> priv_pem
+                {:error, _} -> priv_pem
+              end
           end
         else
           priv_pem
         end
 
-      :ok = File.write!(key_path, pem_to_write)
+      :ok = File.write!(key_tmp, pem_to_write)
+      File.rename!(key_tmp, key_path)
+
+      # Restrict permissions on the private key file for security.
+      # 0o600 (owner read/write) is enforced when possible.
+      try do
+        File.chmod(key_path, 0o600)
+      rescue
+        _ -> :ok
+      end
+
+      # Public certificate can be world-readable.
+      try do
+        File.chmod(cert_path, 0o644)
+      rescue
+        _ -> :ok
+      end
 
       :ok
     rescue
