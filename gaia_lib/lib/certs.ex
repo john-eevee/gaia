@@ -220,14 +220,9 @@ defmodule GaiaLib.Certs do
       csr_pem = X509.CSR.to_pem(csr)
       private_key_pem = X509.PrivateKey.to_pem(private_key)
 
-      # Extract public key and encode to PEM
+      # Extract public key and encode to PEM using X509 helpers
       pub = X509.CSR.public_key(csr)
-      pub_der = :public_key.der_encode(:SubjectPublicKeyInfo, pub)
-
-      pub_pem =
-        "-----BEGIN PUBLIC KEY-----\n" <>
-          (Base.encode64(pub_der, line_length: 64) <> "\n") <>
-          "-----END PUBLIC KEY-----\n"
+      pub_pem = X509.PublicKey.to_pem(pub)
 
       %CSRCertificate{csr: csr_pem, private_key: private_key_pem, public_key: pub_pem}
     end
@@ -246,6 +241,12 @@ defmodule GaiaLib.Certs do
   string. Returns `{:ok, cert_pem}` on success or `{:error, %Error{}}` on
   failure.
   """
+  # Accept both call orders for convenience: (csr_pem, root_ca, days) or (root_ca, csr_pem, days)
+  def sign_csr(%{certificate: _cert, private_key: _priv} = root_ca, csr_pem, validity_days)
+      when is_binary(csr_pem) do
+    sign_csr(csr_pem, root_ca, validity_days)
+  end
+
   def sign_csr(csr_pem, root_ca, validity_days) when is_binary(csr_pem) do
     # Parse CSR
     with {:ok, csr} <- X509.CSR.from_pem(csr_pem),
