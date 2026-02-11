@@ -7,7 +7,8 @@ on:
         required: true
         type: string
         description: "The directory of the app to test (e.g., apps/farm)"
-
+env:
+  MIX_ENV: test
 jobs:
   quality-check:
     runs-on: ubuntu-latest
@@ -21,6 +22,9 @@ jobs:
       # Run Lint (using the path passed in the input)
       - name: Setup Hex
         run: mix local.hex --force && mix local.rebar --force
+      - name: Get Dependencies
+        run: mix deps.get
+        working-directory: ${{ inputs.app_dir }}
       - name: Lint
         working-directory: ${{ inputs.app_dir }}
         run: mix credo --strict --format=json
