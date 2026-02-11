@@ -36,57 +36,6 @@ defmodule GaiaLib.Certs do
     end
   end
 
-  @doc """
-  Validate that the given string is PEM armored.
-
-  Accepts one or more PEM blocks (for example a cert chain or key + cert).
-  Returns `:ok` when every PEM block decodes as base64, otherwise returns
-  `{:error, reason}` describing the failure.
-  """
-  @spec validate_pem_armor(binary()) :: :ok | {:error, String.t()}
-  def validate_pem_armor(pem) when is_binary(pem) do
-    pem = String.trim(pem || "")
-
-    cond do
-      pem == "" ->
-        {:error, "PEM string is empty"}
-
-      true ->
-        # Matches blocks like:
-        # -----BEGIN TYPE-----\n(base64 or optional headers)\n-----END TYPE-----
-        regex = ~r/-----BEGIN ([A-Za-z0-9 _-]+)-----(?:\r?\n)(.*?)(?:\r?\n)-----END \1-----/s
-
-        case Regex.scan(regex, pem) do
-          [] ->
-            {:error, "Invalid PEM: no PEM armor found"}
-
-          matches ->
-            Enum.reduce_while(matches, :ok, fn
-              [_, label, body], _acc ->
-                # Remove header lines (e.g. "Proc-Type: 4,ENCRYPTED") and
-                # join the remaining lines into a contiguous base64 string.
-                base64 =
-                  body
-                  |> String.split(~r/\r?\n/)
-                  |> Enum.reject(&String.contains?(&1, ":"))
-                  |> Enum.join()
-                  |> String.replace(~r/\s+/, "")
-
-                case Base.decode64(base64) do
-                  {:ok, decoded} when byte_size(decoded) > 0 ->
-                    {:cont, :ok}
-
-                  {:ok, _} ->
-                    {:halt, {:error, "Invalid PEM: block #{label} decodes to empty binary"}}
-
-                  :error ->
-                    {:halt, {:error, "Invalid PEM: base64 decode failed for block #{label}"}}
-                end
-            end)
-        end
-    end
-  end
-
   defmodule CertConfig do
     @moduledoc """
     Configuration for generating certificates and CSRs.
@@ -115,10 +64,20 @@ defmodule GaiaLib.Certs do
     def validate(config, :root_ca) do
       cond do
         is_nil(config.organization) or config.organization == "" ->
-          {:error, "Config validation failed: Organization is required for Root CA"}
+          {:error,
+           struct(Error.ConfigValidation,
+             message: "Config validation failed: Organization is required for Root CA",
+             field: :organization,
+             op: :root_ca
+           )}
 
         is_nil(config.country) or config.country == "" ->
-          {:error, "Config validation failed: Country is required for Root CA"}
+          {:error,
+           struct(Error.ConfigValidation,
+             message: "Config validation failed: Country is required for Root CA",
+             field: :country,
+             op: :root_ca
+           )}
 
         true ->
           :ok
@@ -130,7 +89,12 @@ defmodule GaiaLib.Certs do
       no_organization = is_nil(config.organization) or config.organization == ""
 
       if no_common_name and no_organization do
-        {:error, "Config validation failed: CSR requires either Common Name or Organization"}
+        {:error,
+         struct(Error.ConfigValidation,
+           message: "Config validation failed: CSR requires either Common Name or Organization",
+           field: nil,
+           op: :csr
+         )}
       else
         :ok
       end
@@ -184,13 +148,45 @@ defmodule GaiaLib.Certs do
   end
 
   defmodule Error do
+    @moduledoc false
+
+    defmodule ConfigValidation do
+      @moduledoc """
+      Error raised when a certificate configuration fails validation.
+      Fields:
+        - `message`: human readable description
+        - `field`: the field that failed validation (if known)
+        - `op`: operation during which the error occurred
+      """
+      defexception [:message, :field, :op]
+
+      @type t :: %__MODULE__{message: String.t(), field: atom() | nil, op: atom() | nil}
+
+      def message(%__MODULE__{message: msg}), do: msg
+    end
+
+    defmodule PEM do
+      @moduledoc """
+      Error related to PEM parsing/decoding.
+      Fields:
+        - `message`: human readable description
+        - `label`: optional PEM block label (e.g. CERTIFICATE)
+        - `reason`: internal atom describing the failure
+      """
+      defexception [:message, :label, :reason]
+
+      @type t :: %__MODULE__{message: String.t(), label: String.t() | nil, reason: atom() | any()}
+
+      def message(%__MODULE__{message: msg}), do: msg
+    end
+
+    # keep a generic error shape for backwards compatibility
     defexception [:message, :op, :err]
 
-    @type t :: %__MODULE__{
-            message: String.t(),
-            op: atom(),
-            err: any()
-          }
+    @type t ::
+            %__MODULE__{message: String.t(), op: atom() | nil, err: any()}
+            | ConfigValidation.t()
+            | PEM.t()
 
     def message(%__MODULE__{message: msg, err: nil}), do: msg
     def message(%__MODULE__{message: msg, err: err}), do: "#{msg}: #{inspect(err)}"
@@ -241,5 +237,70 @@ defmodule GaiaLib.Certs do
   end
 
   def sign_csr(csr_perm, certificate_authority, validity_days) do
+  end
+
+  @doc """
+  Validate that the given string is PEM armored.
+
+  Accepts one or more PEM blocks (for example a cert chain or key + cert).
+  Returns `:ok` when every PEM block decodes as base64, otherwise returns
+  `{:error, reason}` describing the failure.
+  """
+  @spec validate_pem_armor(binary()) :: :ok | {:error, Error.t()}
+  def validate_pem_armor(pem) do
+    pem
+    |> String.trim()
+    |> do_validate_pem_armor()
+  end
+
+  defp do_validate_pem_armor("") do
+    {:error, struct(Error.PEM, message: "PEM is empty", reason: :empty)}
+  end
+
+  defp do_validate_pem_armor(pem) when is_binary(pem) do
+    # Matches blocks like:
+    # -----BEGIN TYPE-----\n(base64 or optional headers)\n-----END TYPE-----
+    regex = ~r/-----BEGIN ([A-Za-z0-9 _-]+)-----(?:\r?\n)(.*?)(?:\r?\n)-----END \1-----/s
+
+    case Regex.scan(regex, pem) do
+      [] ->
+        {:error, struct(Error.PEM, message: "Invalid PEM: no PEM armor found", reason: :no_armor)}
+
+      matches ->
+        Enum.reduce_while(matches, :ok, fn
+          [_, label, body], _acc ->
+            # Remove header lines (e.g. "Proc-Type: 4,ENCRYPTED") and
+            # join the remaining lines into a contiguous base64 string.
+            base64 =
+              body
+              |> String.split(~r/\r?\n/)
+              |> Enum.reject(&String.contains?(&1, ":"))
+              |> Enum.join()
+              |> String.replace(~r/\s+/, "")
+
+            case Base.decode64(base64) do
+              {:ok, decoded} when byte_size(decoded) > 0 ->
+                {:cont, :ok}
+
+              {:ok, _} ->
+                {:halt,
+                 {:error,
+                  struct(Error.PEM,
+                    message: "Invalid PEM: block #{label} decodes to empty binary",
+                    label: label,
+                    reason: :empty_decoded
+                  )}}
+
+              :error ->
+                {:halt,
+                 {:error,
+                  struct(Error.PEM,
+                    message: "Invalid PEM: base64 decode failed for block #{label}",
+                    label: label,
+                    reason: :base64_decode_failed
+                  )}}
+            end
+        end)
+    end
   end
 end
