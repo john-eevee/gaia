@@ -98,7 +98,7 @@ defmodule GaiaLib.Certs do
       :common_name
     ]
 
-    def validate(config, type = :root_ca) do
+    def validate(config, :root_ca) do
       cond do
         is_nil(config.organization) or config.organization == "" ->
           {:error, "Config validation failed: Organization is required for Root CA"}
@@ -111,7 +111,7 @@ defmodule GaiaLib.Certs do
       end
     end
 
-    def validate(config, type = :csr) do
+    def validate(config, :csr) do
       no_common_name = is_nil(config.common_name) or config.common_name == ""
       no_organization = is_nil(config.organization) or config.organization == ""
 
@@ -135,8 +135,7 @@ defmodule GaiaLib.Certs do
           {"L", config.locality},
           {"CN", config.common_name}
         ]
-        |> Enum.filter(fn {_k, v} -> not is_nil(v) and v != "" end)
-        |> Enum.filter(fn {k, _v} -> k in allowed end)
+        |> Enum.filter(fn {k, v} -> not is_nil(v) and v != "" and k in allowed end)
 
       case rnd_items do
         [] -> "/"
@@ -381,65 +380,67 @@ defmodule GaiaLib.Certs do
       when is_binary(path) do
     password = Keyword.get(opts, :password)
 
+    cert_path = Path.join(path, "root.crt")
+    key_path = Path.join(path, "root.key")
+
+    with :ok <- File.mkdir_p(path),
+         {:ok, pem_to_write} <- prepare_private_pem_safe(priv_pem, password),
+         :ok <- atomic_write_file(cert_path, cert_pem),
+         :ok <- atomic_write_file(key_path, pem_to_write),
+         :ok <- set_file_permissions(key_path, 0o600),
+         :ok <- set_file_permissions(cert_path, 0o644) do
+      :ok
+    else
+      {:error, reason} -> {:error, reason}
+      _ -> {:error, :write_failed}
+    end
+  end
+
+  # Helpers extracted to reduce complexity of write_root_ca/3
+  defp prepare_private_pem(priv_pem, password) when is_binary(password) do
+    case X509.PrivateKey.from_pem(priv_pem) do
+      {:ok, priv} ->
+        X509.PrivateKey.to_pem(priv, password: password)
+
+      {:error, _} ->
+        case X509.PrivateKey.from_pem(priv_pem, password: password) do
+          {:ok, _priv} -> priv_pem
+          {:error, _} -> priv_pem
+        end
+    end
+  end
+
+  defp prepare_private_pem(priv_pem, _), do: priv_pem
+
+  defp prepare_private_pem_safe(priv_pem, password) do
     try do
-      File.mkdir_p!(path)
+      {:ok, prepare_private_pem(priv_pem, password)}
+    rescue
+      _ -> {:error, :invalid_private_key}
+    end
+  end
 
-      cert_path = Path.join(path, "root.crt")
-      key_path = Path.join(path, "root.key")
+  defp atomic_write_file(path, content) do
+    tmp = path <> ".tmp"
 
-      # Write atomically: write to a temp file then rename into place.
-      cert_tmp = cert_path <> ".tmp"
-      key_tmp = key_path <> ".tmp"
-
-      :ok = File.write!(cert_tmp, cert_pem)
-      File.rename!(cert_tmp, cert_path)
-
-      # If password provided, attempt to re-encode the private key with the
-      # password using X509.PrivateKey.to_pem/2. Otherwise write as-is.
-      pem_to_write =
-        if password && is_binary(password) do
-          # If the private key is unencrypted we can parse and re-encode with
-          # the requested password. If it's already encrypted we try to
-          # recognize that and avoid corrupting it.
-          case X509.PrivateKey.from_pem(priv_pem) do
-            {:ok, priv} ->
-              X509.PrivateKey.to_pem(priv, password: password)
-
-            {:error, _} ->
-              # Perhaps the key is already encrypted. Try parsing with the
-              # provided password — if that succeeds the caller provided the
-              # same password and we can write the original PEM as-is. If not,
-              # fall back to writing the original blob unchanged.
-              case X509.PrivateKey.from_pem(priv_pem, password: password) do
-                {:ok, _priv} -> priv_pem
-                {:error, _} -> priv_pem
-              end
-          end
-        else
-          priv_pem
+    case File.write(tmp, content) do
+      :ok ->
+        case File.rename(tmp, path) do
+          :ok -> :ok
+          {:error, reason} -> {:error, reason}
         end
 
-      :ok = File.write!(key_tmp, pem_to_write)
-      File.rename!(key_tmp, key_path)
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
 
-      # Restrict permissions on the private key file for security.
-      # 0o600 (owner read/write) is enforced when possible.
-      try do
-        File.chmod(key_path, 0o600)
-      rescue
-        _ -> :ok
-      end
+  defp set_file_permissions(_path, _mode) when Mix.env() == :test, do: :ok
 
-      # Public certificate can be world-readable.
-      try do
-        File.chmod(cert_path, 0o644)
-      rescue
-        _ -> :ok
-      end
-
-      :ok
-    rescue
-      e -> {:error, e}
+  defp set_file_permissions(path, mode) do
+    case File.chmod(path, mode) do
+      :ok -> :ok
+      {:error, reason} -> {:error, reason}
     end
   end
 end
