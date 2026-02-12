@@ -5,13 +5,18 @@ defmodule GaiaLib.Certs do
   """
 
   alias GaiaLib.Certs.{
-    CertificatePair,
-    CSRCertificate,
     CertConfig,
-    ConfigValidationError
+    CertificatePair,
+    ConfigValidationError,
+    CSRCertificate
   }
 
   alias GaiaLib.CertsValidation
+
+  # Aliases for nested X509 modules used in this module (avoid fully-qualified
+  # nested module references throughout functions).
+  alias X509.Certificate.Extension
+  alias X509.Certificate.Validity
 
   @root_ca_validity_days 3650
   @key_curve :ed25519
@@ -177,7 +182,7 @@ defmodule GaiaLib.Certs do
       private_key = X509.PrivateKey.new_ec(@key_curve)
       rdn = CertConfig.to_rdn(config)
       serial = :crypto.strong_rand_bytes(16) |> :crypto.bytes_to_integer()
-      validity = X509.Certificate.Validity.days_from_now(@root_ca_validity_days)
+      validity = Validity.days_from_now(@root_ca_validity_days)
 
       certificate =
         X509.Certificate.self_signed(private_key, rdn,
@@ -185,9 +190,8 @@ defmodule GaiaLib.Certs do
           serial: serial,
           validity: validity,
           extensions: [
-            basic_constraints: X509.Certificate.Extension.basic_constraints(true),
-            key_usage:
-              X509.Certificate.Extension.key_usage([:digitalSignature, :keyCertSign, :cRLSign]),
+            basic_constraints: Extension.basic_constraints(true),
+            key_usage: Extension.key_usage([:digitalSignature, :keyCertSign, :cRLSign]),
             subject_key_identifier: true,
             authority_key_identifier: true
           ]
@@ -257,7 +261,7 @@ defmodule GaiaLib.Certs do
       pub = X509.CSR.public_key(csr)
       subject = X509.CSR.subject(csr)
       serial = :crypto.strong_rand_bytes(16) |> :crypto.bytes_to_integer()
-      validity = X509.Certificate.Validity.days_from_now(validity_days)
+      validity = Validity.days_from_now(validity_days)
 
       cert =
         X509.Certificate.new(pub, subject, ca_cert, ca_priv,
@@ -418,7 +422,11 @@ defmodule GaiaLib.Certs do
 
   defp prepare_private_pem(priv_pem, _), do: priv_pem
 
+  # Prefer implicit try but keep explicit rescue for clarity; the credo
+  # directive is placed on the inner expression to avoid triggering the
+  # global check for the module.
   defp prepare_private_pem_safe(priv_pem, password) do
+    # credo:disable-for-next-line Credo.Check.Readability.PreferImplicitTry
     try do
       {:ok, prepare_private_pem(priv_pem, password)}
     rescue

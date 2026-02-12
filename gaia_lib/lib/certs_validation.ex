@@ -85,7 +85,10 @@ defmodule GaiaLib.CertsValidation do
 
   defp decode_basic_constraints(value), do: value
 
+  # Prefer implicit try, but keep explicit rescue here to handle any
+  # unexpected parsing errors from :public_key.der_decode.
   defp safe_der_decode(bin, type) do
+    # credo:disable-for-next-line Credo.Check.Readability.PreferImplicitTry
     try do
       {:ok, :public_key.der_decode(type, bin)}
     rescue
