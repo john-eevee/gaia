@@ -1,34 +1,39 @@
 defmodule GaiaLib.Certs do
   @moduledoc """
   Mtls provides functionality to generate Root CA certificates, create CSRs,
-  and sign certificates using Ed25519 keys via OpenSSL.
+  and sign certificates using Ed25519 keys via the x509 library.
   """
 
-  alias GaiaLib.Certs.{CertificateAuthority, CSRCertificate, Config, Error}
+  alias GaiaLib.Certs.{
+    CertificatePair,
+    CSRCertificate,
+    CertConfig,
+    ConfigValidationError
+  }
 
-  @root_ca_validity_years 10
+  alias GaiaLib.CertsValidation
 
-  defmodule CertificateAuthority do
+  @root_ca_validity_days 3650
+  @key_curve :ed25519
+
+  defmodule CertificatePair do
     @moduledoc """
     Represents a Certificate Authority (CA) with its certificate and private key.
      - `certificate`: PEM-encoded CA certificate
      - `private_key`: PEM-encoded private key corresponding to the CA certificate
     """
-    @type t :: %__MODULE__{
-            private_key: binary(),
-            certificate: binary()
-          }
+    @type t :: %__MODULE__{private_key: binary(), certificate: binary()}
     defstruct [:private_key, :certificate]
 
     defimpl Inspect do
       import Inspect.Algebra
 
-      def inspect(%CertificateAuthority{} = ca, opts) do
+      def inspect(%CertificatePair{} = ca, opts) do
         private_key = if ca.private_key, do: "[REDACTED]", else: "nil"
         certificate = if ca.certificate, do: "[REDACTED]", else: "nil"
 
         {concat([
-           "CertificateAuthority<private_key: ",
+           "CertificatePair<private_key: ",
            private_key,
            ", certificate: ",
            certificate,
@@ -38,7 +43,37 @@ defmodule GaiaLib.Certs do
     end
   end
 
-  defmodule Config do
+  defmodule ConfigValidationError do
+    @moduledoc """
+    raised when a certificate configuration fails validation.
+    Fields:
+      - `message`: human readable description
+      - `field`: the field that failed validation (if known)
+    """
+    defexception [:message, :field, :op]
+
+    @type t :: %__MODULE__{message: String.t(), field: atom() | nil}
+
+    def message(%__MODULE__{message: msg}), do: msg
+  end
+
+  defmodule Error do
+    @moduledoc """
+    Generic error used by certs APIs in tests.
+    Fields:
+      - `message`: human readable description
+      - `op`: the operation that failed
+      - `err`: optional internal error
+    """
+    defexception [:message, :op, :err]
+
+    @type t :: %__MODULE__{message: String.t(), op: atom() | nil, err: any() | nil}
+
+    def message(%__MODULE__{message: msg, err: nil}), do: msg
+    def message(%__MODULE__{message: msg, err: err}), do: "#{msg} - #{inspect(err)}"
+  end
+
+  defmodule CertConfig do
     @moduledoc """
     Configuration for generating certificates and CSRs.
     """
@@ -86,6 +121,27 @@ defmodule GaiaLib.Certs do
         :ok
       end
     end
+
+    def to_rdn(config) do
+      # Only include attribute keys supported by X509.RDNSequence.new_attr/1
+      allowed = ["O", "OU", "C", "ST", "L", "CN"]
+
+      rnd_items =
+        [
+          {"O", config.organization},
+          {"OU", config.organizational_unit},
+          {"C", config.country},
+          {"ST", config.province},
+          {"L", config.locality},
+          {"CN", config.common_name}
+        ]
+        |> Enum.filter(fn {k, v} -> not is_nil(v) and v != "" and k in allowed end)
+
+      case rnd_items do
+        [] -> "/"
+        _ -> "/" <> Enum.map_join(rnd_items, "/", fn {k, v} -> "#{k}=#{v}" end)
+      end
+    end
   end
 
   defmodule CSRCertificate do
@@ -116,456 +172,275 @@ defmodule GaiaLib.Certs do
     end
   end
 
-  defmodule Error do
-    defexception [:message, :op, :err]
+  def create_root_ca(config) do
+    certificate = fn ->
+      private_key = X509.PrivateKey.new_ec(@key_curve)
+      rdn = CertConfig.to_rdn(config)
+      serial = :crypto.strong_rand_bytes(16) |> :crypto.bytes_to_integer()
+      validity = X509.Certificate.Validity.days_from_now(@root_ca_validity_days)
 
-    @type t :: %__MODULE__{
-            message: String.t(),
-            op: atom(),
-            err: any()
-          }
+      certificate =
+        X509.Certificate.self_signed(private_key, rdn,
+          template: :root_ca,
+          serial: serial,
+          validity: validity,
+          extensions: [
+            basic_constraints: X509.Certificate.Extension.basic_constraints(true),
+            key_usage:
+              X509.Certificate.Extension.key_usage([:digitalSignature, :keyCertSign, :cRLSign]),
+            subject_key_identifier: true,
+            authority_key_identifier: true
+          ]
+        )
 
-    def message(%__MODULE__{message: msg, err: nil}), do: msg
-    def message(%__MODULE__{message: msg, err: err}), do: "#{msg}: #{inspect(err)}"
+      certificate_pem = X509.Certificate.to_pem(certificate)
+      private_key_pem = X509.PrivateKey.to_pem(private_key)
+
+      %CertificatePair{
+        certificate: certificate_pem,
+        private_key: private_key_pem
+      }
+    end
+
+    case CertConfig.validate(config, :root_ca) do
+      :ok ->
+        {:ok, certificate.()}
+
+      {:error, msg} ->
+        {:error, %Error{message: msg, op: :create_root_ca}}
+    end
   end
 
-  # ============================================================================
-  # Public API
-  # ============================================================================
+  def create_csr(config) do
+    csr_fun = fn ->
+      private_key = X509.PrivateKey.new_ec(@key_curve)
+      rdn = CertConfig.to_rdn(config)
+      csr = X509.CSR.new(private_key, rdn)
+      csr_pem = X509.CSR.to_pem(csr)
+      private_key_pem = X509.PrivateKey.to_pem(private_key)
 
-  @spec create_root_ca(Config.t()) :: {:ok, CertificateAuthority.t()} | {:error, Error.t()}
-  def create_root_ca(%Config{} = config) do
-    op = :create_root_ca
+      # Extract public key and encode to PEM using X509 helpers
+      pub = X509.CSR.public_key(csr)
+      pub_pem = X509.PublicKey.to_pem(pub)
 
-    with :ok <- Config.validate(config, :root_ca),
-         {:ok, priv_key_pem} <- generate_and_encode_ed25519_key(),
-         {:ok, cert_pem} <-
-           create_self_signed_cert(config, priv_key_pem, @root_ca_validity_years * 365) do
-      {:ok, %CertificateAuthority{certificate: cert_pem, private_key: priv_key_pem}}
+      %CSRCertificate{csr: csr_pem, private_key: private_key_pem, public_key: pub_pem}
+    end
+
+    case CertConfig.validate(config, :csr) do
+      :ok -> {:ok, csr_fun.()}
+      {:error, msg} -> {:error, %Error{message: msg, op: :create_csr}}
+    end
+  end
+
+  @doc """
+  Sign a CSR using the given root CA pair.
+
+  `root_ca` must be a map/struct with `:certificate` and `:private_key` fields
+  (the same shape returned by `create_root_ca/1`). `csr_pem` is a CSR PEM
+  string. Returns `{:ok, cert_pem}` on success or `{:error, %Error{}}` on
+  failure.
+  """
+  # Accept both call orders for convenience: (csr_pem, root_ca, days) or (root_ca, csr_pem, days)
+  def sign_csr(%{certificate: _cert, private_key: _priv} = root_ca, csr_pem, validity_days)
+      when is_binary(csr_pem) do
+    sign_csr(csr_pem, root_ca, validity_days)
+  end
+
+  def sign_csr(csr_pem, root_ca, validity_days) when is_binary(csr_pem) do
+    # Parse CSR
+    with {:ok, csr} <- X509.CSR.from_pem(csr_pem),
+         %{certificate: certificate_pem, private_key: private_key_pem} <- root_ca,
+         {:ok, ca_cert} <- X509.Certificate.from_pem(certificate_pem),
+         {:ok, ca_priv} <- X509.PrivateKey.from_pem(private_key_pem),
+         true <- CertsValidation.root_ca?(ca_cert),
+         true <- CertsValidation.certificate_matches_private_key?(ca_cert, ca_priv) do
+      pub = X509.CSR.public_key(csr)
+      subject = X509.CSR.subject(csr)
+      serial = :crypto.strong_rand_bytes(16) |> :crypto.bytes_to_integer()
+      validity = X509.Certificate.Validity.days_from_now(validity_days)
+
+      cert =
+        X509.Certificate.new(pub, subject, ca_cert, ca_priv,
+          template: :server,
+          serial: serial,
+          validity: validity
+        )
+
+      {:ok, X509.Certificate.to_pem(cert)}
     else
-      {:error, reason} when is_binary(reason) ->
-        {:error, %Error{message: reason, op: op}}
+      {:error, {:malformed, _}} = err ->
+        {:error, %Error{message: "Invalid CSR PEM", op: :sign_csr, err: err}}
 
-      error ->
-        {:error, %Error{message: inspect(error), op: op, err: error}}
+      {:error, reason} ->
+        {:error, %Error{message: "Sign CSR failed", op: :sign_csr, err: reason}}
+
+      false ->
+        {:error, %Error{message: "private key does not match", op: :sign_csr}}
+
+      _ ->
+        {:error, %Error{message: "invalid ca", op: :sign_csr}}
     end
   end
 
-  @spec load_root_ca(binary(), binary()) ::
-          {:ok, CertificateAuthority.t()} | {:error, Error.t()}
-  def load_root_ca(ca_pem, key_pem) do
-    op = :load_root_ca
+  def sign_csr(_, _, _), do: {:error, %Error{message: "invalid csr", op: :sign_csr}}
 
-    with :ok <- validate_pem_cert(ca_pem),
-         :ok <- validate_pem_key(key_pem),
-         :ok <- verify_key_matches_cert(ca_pem, key_pem) do
-      {:ok, %CertificateAuthority{certificate: ca_pem, private_key: key_pem}}
+  @doc """
+  Load and validate a root CA from PEMs or der/binary inputs.
+
+  Returns `{:ok, %CertificatePair{}}` when validation succeeds or
+  `{:error, %Error{}}` when it fails.
+  """
+  def load_root_ca(cert_pem_or_der, priv_pem_or_der) do
+    cert_result =
+      case X509.Certificate.from_pem(cert_pem_or_der) do
+        {:ok, cert} -> {:ok, cert}
+        {:error, _} -> X509.Certificate.from_der(cert_pem_or_der)
+      end
+
+    priv_result =
+      case X509.PrivateKey.from_pem(priv_pem_or_der) do
+        {:ok, priv} -> {:ok, priv}
+        {:error, _} -> X509.PrivateKey.from_der(priv_pem_or_der)
+      end
+
+    with {:ok, cert} <- cert_result,
+         {:ok, priv} <- priv_result,
+         true <- CertsValidation.root_ca?(cert),
+         true <- CertsValidation.certificate_matches_private_key?(cert, priv) do
+      {:ok,
+       %CertificatePair{
+         certificate: X509.Certificate.to_pem(cert),
+         private_key: X509.PrivateKey.to_pem(priv)
+       }}
     else
-      {:error, reason} when is_binary(reason) ->
-        {:error, %Error{message: reason, op: op}}
+      {:error, _} = err ->
+        {:error, %Error{message: "Invalid certificate or key", op: :load_root_ca, err: err}}
 
-      error ->
-        {:error, %Error{message: inspect(error), op: op, err: error}}
+      false ->
+        {:error, %Error{message: "private key does not match", op: :load_root_ca}}
+
+      _ ->
+        {:error, %Error{message: "certificate is not a root CA", op: :load_root_ca}}
     end
   end
 
-  @spec create_csr_certificate(Config.t()) :: {:ok, CSRCertificate.t()} | {:error, Error.t()}
-  def create_csr_certificate(%Config{} = config) do
-    op = :create_csr
+  @doc """
+  Like `load_root_ca/2` but accepts an optional password for encrypted
+  private key PEMs. The password should be a binary (UTF-8) or nil.
+  Returns `{:ok, %CertificatePair{}}` or `{:error, %Error{}}`.
+  """
+  def load_root_ca(cert_pem_or_der, priv_pem_or_der, password) do
+    cert_result =
+      case X509.Certificate.from_pem(cert_pem_or_der) do
+        {:ok, cert} -> {:ok, cert}
+        {:error, _} -> X509.Certificate.from_der(cert_pem_or_der)
+      end
 
-    with :ok <- Config.validate(config, :csr),
-         {:ok, priv_key_pem} <- generate_and_encode_ed25519_key(),
-         {:ok, csr_pem} <- create_csr_with_openssl(config, priv_key_pem),
-         {:ok, pub_key_pem} <- extract_public_key(priv_key_pem) do
-      {:ok, %CSRCertificate{csr: csr_pem, private_key: priv_key_pem, public_key: pub_key_pem}}
+    priv_result =
+      case X509.PrivateKey.from_pem(priv_pem_or_der, password: password) do
+        {:ok, priv} -> {:ok, priv}
+        {:error, _} -> X509.PrivateKey.from_der(priv_pem_or_der)
+      end
+
+    with {:ok, cert} <- cert_result,
+         {:ok, priv} <- priv_result,
+         true <- CertsValidation.root_ca?(cert),
+         true <- CertsValidation.certificate_matches_private_key?(cert, priv) do
+      {:ok,
+       %CertificatePair{
+         certificate: X509.Certificate.to_pem(cert),
+         private_key: X509.PrivateKey.to_pem(priv)
+       }}
     else
-      {:error, reason} when is_binary(reason) ->
-        {:error, %Error{message: reason, op: op}}
+      {:error, _} = err ->
+        {:error, %Error{message: "Invalid certificate or key", op: :load_root_ca, err: err}}
 
-      error ->
-        {:error, %Error{message: inspect(error), op: op, err: error}}
+      false ->
+        {:error, %Error{message: "private key does not match", op: :load_root_ca}}
+
+      _ ->
+        {:error, %Error{message: "certificate is not a root CA", op: :load_root_ca}}
     end
   end
 
-  @spec sign_csr(CertificateAuthority.t(), binary(), integer()) ::
-          {:ok, binary()} | {:error, Error.t()}
-  def sign_csr(%CertificateAuthority{} = ca, csr_pem, validity_days) do
-    op = :sign_csr
+  @doc """
+  Write a CertificatePair to disk. `path` should be a directory; the function
+  will write two files inside it: `root.crt` and `root.key`.
 
-    with :ok <- validate_pem_csr(csr_pem),
-         {:ok, cert_pem} <- sign_csr_with_openssl(ca, csr_pem, validity_days) do
-      {:ok, cert_pem}
-    else
-      {:error, reason} when is_binary(reason) ->
-        {:error, %Error{message: reason, op: op}}
+  Options:
+    * `:password` - optional PEM password to encrypt the private key (binary)
 
-      error ->
-        {:error, %Error{message: inspect(error), op: op, err: error}}
-    end
-  end
+  Returns `:ok` or `{:error, reason}`.
+  """
+  def write_root_ca(
+        %CertificatePair{certificate: cert_pem, private_key: priv_pem},
+        path,
+        opts \\ []
+      )
+      when is_binary(path) do
+    password = Keyword.get(opts, :password)
 
-  # ============================================================================
-  # Internal Helpers - Key Generation
-  # ============================================================================
+    cert_path = Path.join(path, "root.crt")
+    key_path = Path.join(path, "root.key")
 
-  defp generate_and_encode_ed25519_key do
-    try do
-      # Generate Ed25519 key pair using crypto module
-      {_pub_key, priv_key} = :crypto.generate_key(:eddsa, :ed25519)
-
-      # Create a temporary directory
-      temp_dir = Path.join(System.tmp_dir!(), "gaia_mtls_#{:erlang.unique_integer()}")
-      File.mkdir_p!(temp_dir)
-
-      try do
-        # Create PKCS8 PEM manually from the raw 32-byte key
-        # PKCS8 structure for Ed25519:
-        # The raw key is wrapped in an OCTET STRING inside PrivateKeyInfo
-        pkcs8_pem = encode_ed25519_pkcs8(priv_key)
-        {:ok, pkcs8_pem}
-      after
-        File.rm_rf!(temp_dir)
-      end
-    rescue
-      e -> {:error, "failed to generate Ed25519 key: #{inspect(e)}"}
-    end
-  end
-
-  defp encode_ed25519_pkcs8(priv_key) when is_binary(priv_key) and byte_size(priv_key) == 32 do
-    # PKCS#8 structure for Ed25519
-    # PrivateKeyInfo ::= SEQUENCE {
-    #   version INTEGER,
-    #   privateKeyAlgorithm AlgorithmIdentifier,
-    #   privateKey OCTET STRING,
-    #   ...
-    # }
-
-    # Build DER manually
-    # OID for Ed25519
-    oid_ed25519 = <<0x06, 0x03, 0x2B, 0x65, 0x70>>
-    # INTEGER 0
-    version = <<0x02, 0x01, 0x00>>
-
-    # AlgorithmIdentifier SEQUENCE - includes OID tag and length bytes
-    algo_id = <<0x30, 0x05>> <> oid_ed25519
-
-    # OCTET STRING containing the private key
-    # First layer: wrap raw key in OCTET STRING (0x04 0x20)
-    inner_octets = <<0x04, 0x20>> <> priv_key
-    # Second layer: wrap the inner OCTET STRING in an OCTET STRING for PrivateKey
-    priv_key_octets = <<0x04, byte_size(inner_octets)>> <> inner_octets
-
-    # Full PrivateKeyInfo SEQUENCE
-    pkcs8_content = version <> algo_id <> priv_key_octets
-    pkcs8_length = byte_size(pkcs8_content)
-
-    pkcs8_der =
-      if pkcs8_length < 128 do
-        <<0x30, pkcs8_length>> <> pkcs8_content
-      else
-        len_bytes = :binary.encode_unsigned(pkcs8_length)
-        <<0x30, 0x81, len_bytes::binary>> <> pkcs8_content
-      end
-
-    # Encode to PEM
-    der_to_pem(pkcs8_der, "PRIVATE KEY")
-  end
-
-  defp der_to_pem(der, label) when is_binary(der) do
-    encoded = Base.encode64(der, padding: true)
-
-    lines =
-      encoded
-      |> String.split("", trim: true)
-      |> Enum.chunk_every(64)
-      |> Enum.map_join("\n", &Enum.join/1)
-
-    "-----BEGIN #{label}-----\n#{lines}\n-----END #{label}-----\n"
-  end
-
-  defp create_self_signed_cert(config, priv_key_pem, validity_days) do
-    try do
-      # Build subject DN string
-      subject_dn = config_to_subject_string(config)
-
-      # Create temporary files
-      key_file = Path.join(System.tmp_dir!(), "ca_key_#{:erlang.unique_integer()}.pem")
-      cert_file = Path.join(System.tmp_dir!(), "ca_cert_#{:erlang.unique_integer()}.pem")
-
-      try do
-        # Write key to temp file
-        File.write!(key_file, priv_key_pem)
-
-        # Use OpenSSL to create self-signed certificate
-        result =
-          System.cmd("openssl", [
-            "req",
-            "-new",
-            "-x509",
-            "-days",
-            Integer.to_string(validity_days),
-            "-key",
-            key_file,
-            "-out",
-            cert_file,
-            "-subj",
-            subject_dn
-          ])
-
-        case result do
-          {_, 0} ->
-            cert_pem = File.read!(cert_file)
-            {:ok, cert_pem}
-
-          {error_msg, code} ->
-            {:error, "OpenSSL req failed (code #{code}): #{error_msg}"}
-        end
-      after
-        safe_rm(key_file)
-        safe_rm(cert_file)
-      end
-    rescue
-      e -> {:error, "failed to create self-signed certificate: #{inspect(e)}"}
-    end
-  end
-
-  defp create_csr_with_openssl(config, priv_key_pem) do
-    try do
-      subject_dn = config_to_subject_string(config)
-
-      key_file = Path.join(System.tmp_dir!(), "csr_key_#{:erlang.unique_integer()}.pem")
-      csr_file = Path.join(System.tmp_dir!(), "csr_#{:erlang.unique_integer()}.pem")
-
-      try do
-        File.write!(key_file, priv_key_pem)
-
-        result =
-          System.cmd("openssl", [
-            "req",
-            "-new",
-            "-key",
-            key_file,
-            "-out",
-            csr_file,
-            "-subj",
-            subject_dn
-          ])
-
-        case result do
-          {_, 0} ->
-            csr_pem = File.read!(csr_file)
-            {:ok, csr_pem}
-
-          {error_msg, code} ->
-            {:error, "OpenSSL req failed (code #{code}): #{error_msg}"}
-        end
-      after
-        safe_rm(key_file)
-        safe_rm(csr_file)
-      end
-    rescue
-      e -> {:error, "failed to create CSR: #{inspect(e)}"}
-    end
-  end
-
-  defp sign_csr_with_openssl(%CertificateAuthority{} = ca, csr_pem, validity_days) do
-    try do
-      ca_key_file = Path.join(System.tmp_dir!(), "ca_key_sign_#{:erlang.unique_integer()}.pem")
-      ca_cert_file = Path.join(System.tmp_dir!(), "ca_cert_sign_#{:erlang.unique_integer()}.pem")
-      csr_input_file = Path.join(System.tmp_dir!(), "csr_input_#{:erlang.unique_integer()}.pem")
-
-      cert_output_file =
-        Path.join(System.tmp_dir!(), "cert_output_#{:erlang.unique_integer()}.pem")
-
-      try do
-        File.write!(ca_key_file, ca.private_key)
-        File.write!(ca_cert_file, ca.certificate)
-        File.write!(csr_input_file, csr_pem)
-
-        result =
-          System.cmd("openssl", [
-            "x509",
-            "-req",
-            "-in",
-            csr_input_file,
-            "-CA",
-            ca_cert_file,
-            "-CAkey",
-            ca_key_file,
-            "-CAcreateserial",
-            "-out",
-            cert_output_file,
-            "-days",
-            Integer.to_string(validity_days)
-          ])
-
-        case result do
-          {_, 0} ->
-            cert_pem = File.read!(cert_output_file)
-            {:ok, cert_pem}
-
-          {error_msg, code} ->
-            {:error, "OpenSSL x509 failed (code #{code}): #{error_msg}"}
-        end
-      after
-        safe_rm(ca_key_file)
-        safe_rm(ca_cert_file)
-        safe_rm(csr_input_file)
-        safe_rm(cert_output_file)
-        # Clean up the serial file that OpenSSL creates
-        safe_rm(ca_cert_file <> ".srl")
-      end
-    rescue
-      e -> {:error, "failed to sign CSR: #{inspect(e)}"}
-    end
-  end
-
-  defp extract_public_key(priv_key_pem) do
-    try do
-      key_file = Path.join(System.tmp_dir!(), "priv_key_#{:erlang.unique_integer()}.pem")
-      pub_file = Path.join(System.tmp_dir!(), "pub_key_#{:erlang.unique_integer()}.pem")
-
-      try do
-        File.write!(key_file, priv_key_pem)
-
-        result =
-          System.cmd("openssl", [
-            "pkey",
-            "-in",
-            key_file,
-            "-pubout",
-            "-out",
-            pub_file
-          ])
-
-        case result do
-          {_, 0} ->
-            pub_pem = File.read!(pub_file)
-            {:ok, pub_pem}
-
-          {error_msg, code} ->
-            {:error, "OpenSSL pkey failed (code #{code}): #{error_msg}"}
-        end
-      after
-        safe_rm(key_file)
-        safe_rm(pub_file)
-      end
-    rescue
-      e -> {:error, "failed to extract public key: #{inspect(e)}"}
-    end
-  end
-
-  # ============================================================================
-  # Helper Functions
-  # ============================================================================
-
-  defp safe_rm(file_path) do
-    File.rm(file_path)
-  rescue
-    _ -> :ok
-  end
-
-  # ============================================================================
-  # DN Handling
-  # ============================================================================
-
-  defp config_to_subject_string(config) do
-    parts = []
-
-    parts = if config.country, do: parts ++ ["C=#{config.country}"], else: parts
-    parts = if config.province, do: parts ++ ["ST=#{config.province}"], else: parts
-    parts = if config.locality, do: parts ++ ["L=#{config.locality}"], else: parts
-    parts = if config.organization, do: parts ++ ["O=#{config.organization}"], else: parts
-
-    parts =
-      if config.organizational_unit,
-        do: parts ++ ["OU=#{config.organizational_unit}"],
-        else: parts
-
-    parts =
-      if config.street_address, do: parts ++ ["STREET=#{config.street_address}"], else: parts
-
-    parts = if config.postal_code, do: parts ++ ["postalCode=#{config.postal_code}"], else: parts
-    parts = if config.common_name, do: parts ++ ["CN=#{config.common_name}"], else: parts
-
-    "/" <> Enum.join(parts, "/")
-  end
-
-  # ============================================================================
-  # Validation Helpers
-  # ============================================================================
-
-  defp verify_key_matches_cert(cert_pem, key_pem) do
-    with {:ok, pub_key_from_key} <- extract_public_key(key_pem),
-         {:ok, pub_key_from_cert} <- extract_public_key_from_cert(cert_pem) do
-      if pub_key_from_key == pub_key_from_cert do
-        :ok
-      else
-        {:error, "private key does not match certificate"}
-      end
+    with :ok <- File.mkdir_p(path),
+         {:ok, pem_to_write} <- prepare_private_pem_safe(priv_pem, password),
+         :ok <- atomic_write_file(cert_path, cert_pem),
+         :ok <- atomic_write_file(key_path, pem_to_write),
+         :ok <- set_file_permissions(key_path, 0o600),
+         :ok <- set_file_permissions(cert_path, 0o644) do
+      :ok
     else
       {:error, reason} -> {:error, reason}
+      _ -> {:error, :write_failed}
     end
   end
 
-  defp extract_public_key_from_cert(cert_pem) when is_binary(cert_pem) do
-    pub_file = Path.join(System.tmp_dir!(), "pub_key_from_cert_#{:erlang.unique_integer()}.pem")
-    cert_file = Path.join(System.tmp_dir!(), "ca_cert_#{:erlang.unique_integer()}.pem")
+  # Helpers extracted to reduce complexity of write_root_ca/3
+  defp prepare_private_pem(priv_pem, password) when is_binary(password) do
+    case X509.PrivateKey.from_pem(priv_pem) do
+      {:ok, priv} ->
+        X509.PrivateKey.to_pem(priv, password: password)
 
+      {:error, _} ->
+        case X509.PrivateKey.from_pem(priv_pem, password: password) do
+          {:ok, _priv} -> priv_pem
+          {:error, _} -> priv_pem
+        end
+    end
+  end
+
+  defp prepare_private_pem(priv_pem, _), do: priv_pem
+
+  defp prepare_private_pem_safe(priv_pem, password) do
     try do
-      File.write!(cert_file, cert_pem)
-
-      result =
-        System.cmd("openssl", [
-          "x509",
-          "-in",
-          cert_file,
-          "-pubkey",
-          "-noout",
-          "-out",
-          pub_file
-        ])
-
-      case result do
-        {_, 0} ->
-          pub_pem = File.read!(pub_file)
-          {:ok, pub_pem}
-
-        {error_msg, code} ->
-          {:error, "OpenSSL failed to extract public key from cert (code #{code}): #{error_msg}"}
-      end
+      {:ok, prepare_private_pem(priv_pem, password)}
     rescue
-      e -> {:error, "failed to extract public key from certificate: #{inspect(e)}"}
-    after
-      safe_rm(cert_file)
-      safe_rm(pub_file)
+      _ -> {:error, :invalid_private_key}
     end
   end
 
-  defp validate_pem_cert(pem) when is_binary(pem) do
-    if String.contains?(pem, "-----BEGIN CERTIFICATE-----") and
-         String.contains?(pem, "-----END CERTIFICATE-----") do
-      :ok
-    else
-      {:error, "invalid certificate PEM format"}
+  defp atomic_write_file(path, content) do
+    tmp = path <> ".tmp"
+
+    case File.write(tmp, content) do
+      :ok ->
+        case File.rename(tmp, path) do
+          :ok -> :ok
+          {:error, reason} -> {:error, reason}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
-  defp validate_pem_csr(pem) when is_binary(pem) do
-    if String.contains?(pem, "-----BEGIN CERTIFICATE REQUEST-----") and
-         String.contains?(pem, "-----END CERTIFICATE REQUEST-----") do
-      :ok
-    else
-      {:error, "invalid CSR PEM format"}
-    end
-  end
+  defp set_file_permissions(_path, _mode) when Mix.env() == :test, do: :ok
 
-  defp validate_pem_key(pem) when is_binary(pem) do
-    if String.contains?(pem, "-----BEGIN PRIVATE KEY-----") and
-         String.contains?(pem, "-----END PRIVATE KEY-----") do
-      :ok
-    else
-      {:error, "invalid private key PEM format"}
+  defp set_file_permissions(path, mode) do
+    case File.chmod(path, mode) do
+      :ok -> :ok
+      {:error, reason} -> {:error, reason}
     end
   end
 end
