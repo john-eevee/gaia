@@ -25,6 +25,8 @@ jobs:
       - name: Get Dependencies
         run: mix deps.get
         working-directory: ${{ inputs.app_dir }}
+      - name: Compile
+        run: mix compile --warning-as-errors --force
       - name: Lint
         working-directory: ${{ inputs.app_dir }}
         run: mix credo --strict --format=json
