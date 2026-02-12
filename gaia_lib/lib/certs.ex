@@ -435,12 +435,16 @@ defmodule GaiaLib.Certs do
     end
   end
 
-  defp set_file_permissions(_path, _mode) when Mix.env() == :test, do: :ok
-
   defp set_file_permissions(path, mode) do
-    case File.chmod(path, mode) do
-      :ok -> :ok
-      {:error, reason} -> {:error, reason}
+    case System.get_env("MIX_ENV") do
+      "test" ->
+        :ok
+
+      _ ->
+        case File.chmod(path, mode) do
+          :ok -> :ok
+          {:error, reason} -> {:error, reason}
+        end
     end
   end
 end
