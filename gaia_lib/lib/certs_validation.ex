@@ -150,7 +150,7 @@ defmodule GaiaLib.CertsValidation do
           {label, Base.decode64(base64)}
         end)
         |> Enum.reduce_while(:ok, fn
-          {label, {:ok, decoded}}, _acc when byte_size(decoded) > 0 ->
+          {_, {:ok, decoded}}, _acc when byte_size(decoded) > 0 ->
             {:cont, :ok}
 
           {label, {:ok, _}}, _acc ->
