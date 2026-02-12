@@ -370,7 +370,7 @@ defmodule GaiaLib.Certs do
   Options:
     * `:password` - optional PEM password to encrypt the private key (binary)
 
-  Returns `:ok` or `{:error, reason}`.
+  Returns `:ok` or `{:error, %Error{}}`.
   """
   def write_root_ca(
         %CertificatePair{certificate: cert_pem, private_key: priv_pem},
@@ -391,8 +391,14 @@ defmodule GaiaLib.Certs do
          :ok <- set_file_permissions(cert_path, 0o644) do
       :ok
     else
-      {:error, reason} -> {:error, reason}
-      _ -> {:error, :write_failed}
+      {:error, %Error{} = err} ->
+        {:error, err}
+
+      {:error, reason} ->
+        {:error, %Error{message: "Write failed", op: :write_root_ca, err: reason}}
+
+      _ ->
+        {:error, %Error{message: "write failed", op: :write_root_ca}}
     end
   end
 
@@ -416,7 +422,8 @@ defmodule GaiaLib.Certs do
     try do
       {:ok, prepare_private_pem(priv_pem, password)}
     rescue
-      _ -> {:error, :invalid_private_key}
+      err ->
+        {:error, %Error{message: "Invalid private key", op: :prepare_private_pem_safe, err: err}}
     end
   end
 
@@ -426,12 +433,15 @@ defmodule GaiaLib.Certs do
     case File.write(tmp, content) do
       :ok ->
         case File.rename(tmp, path) do
-          :ok -> :ok
-          {:error, reason} -> {:error, reason}
+          :ok ->
+            :ok
+
+          {:error, reason} ->
+            {:error, %Error{message: "Atomic rename failed", op: :atomic_write_file, err: reason}}
         end
 
       {:error, reason} ->
-        {:error, reason}
+        {:error, %Error{message: "Atomic write failed", op: :atomic_write_file, err: reason}}
     end
   end
 
@@ -442,8 +452,16 @@ defmodule GaiaLib.Certs do
 
       _ ->
         case File.chmod(path, mode) do
-          :ok -> :ok
-          {:error, reason} -> {:error, reason}
+          :ok ->
+            :ok
+
+          {:error, reason} ->
+            {:error,
+             %Error{
+               message: "Failed to set file permissions",
+               op: :set_file_permissions,
+               err: reason
+             }}
         end
     end
   end
