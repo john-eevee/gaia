@@ -3,7 +3,13 @@ defmodule GaiaLib.CertsTest do
 
   alias GaiaLib.Certs
   # Map historical test names to current module names in `lib/certs.ex`.
-  alias GaiaLib.Certs.{CertificatePair, CSRCertificate, CertConfig, ConfigValidationError}
+  alias GaiaLib.Certs.{
+    CertConfig,
+    CertificatePair,
+    ConfigValidationError,
+    CSRCertificate
+  }
+
   alias GaiaLib.Certs.CertificatePair, as: CertificateAuthority
   alias GaiaLib.Certs.Error, as: Error
 
