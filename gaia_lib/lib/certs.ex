@@ -416,10 +416,11 @@ defmodule GaiaLib.Certs do
 
   defp prepare_private_pem(priv_pem, _), do: priv_pem
 
-  # Credo: prefer implicit try; this function deliberately catches any
-  # unexpected exceptions from the X509 library and returns a safe error.
-  # credo:disable-for-next-line Credo.Check.Readability.PreferImplicitTry
+  # Prefer implicit try but keep explicit rescue for clarity; the credo
+  # directive is placed on the inner expression to avoid triggering the
+  # global check for the module.
   defp prepare_private_pem_safe(priv_pem, password) do
+    # credo:disable-for-next-line Credo.Check.Readability.PreferImplicitTry
     try do
       {:ok, prepare_private_pem(priv_pem, password)}
     rescue

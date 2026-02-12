@@ -87,8 +87,8 @@ defmodule GaiaLib.CertsValidation do
 
   # Prefer implicit try, but keep explicit rescue here to handle any
   # unexpected parsing errors from :public_key.der_decode.
-  # credo:disable-for-next-line Credo.Check.Readability.PreferImplicitTry
   defp safe_der_decode(bin, type) do
+    # credo:disable-for-next-line Credo.Check.Readability.PreferImplicitTry
     try do
       {:ok, :public_key.der_decode(type, bin)}
     rescue
