@@ -19,5 +19,5 @@ pre-commit:
 
 commit-msg:
   commands:
-    "lint-commit-msg":
-      run: ./scripts/validate-commit.sh {1}
+    commitlint:
+      run: npx --no-install commitlint --edit {1}
