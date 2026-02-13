@@ -1,7 +1,7 @@
 defmodule Gaia.Common do
   def version do
     case System.get_env("VERSION") do
-      nil ->  __DIR__ <> "/VERSION" |> File.read!() |> String.trim()
+      nil -> (__DIR__ <> "/VERSION") |> File.read!() |> String.trim()
       version -> version
     end
     |> Version.parse!()
@@ -19,7 +19,6 @@ defmodule Gaia.Common do
   end
 
   defmodule DepsCatalog do
-
     def get_dep(name) when is_atom(name) do
       deps()
       |> Enum.find(fn dep_manifest -> elem(dep_manifest, 0) == name end)
@@ -28,7 +27,8 @@ defmodule Gaia.Common do
     defp deps do
       [
         {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-        {:x509, "~> 0.9"}
+        {:x509, "~> 0.9"},
+        {:nimble_options, "~> 1.1"}
       ]
     end
   end
