@@ -387,7 +387,7 @@ defmodule GaiaLib.Certs do
     key_path = Path.join(path, "root.key")
 
     with :ok <- File.mkdir_p(path),
-         {:ok, pem_to_write} <- prepare_private_pem_safe(priv_pem, password),
+         pem_to_write when is_binary(pem_to_write) <- prepare_private_pem(priv_pem, password),
          :ok <- atomic_write_file(cert_path, cert_pem),
          :ok <- atomic_write_file(key_path, pem_to_write),
          :ok <- set_file_permissions(key_path, 0o600),
@@ -420,19 +420,6 @@ defmodule GaiaLib.Certs do
   end
 
   defp prepare_private_pem(priv_pem, _), do: priv_pem
-
-  # Prefer implicit try but keep explicit rescue for clarity; the credo
-  # directive is placed on the inner expression to avoid triggering the
-  # global check for the module.
-  defp prepare_private_pem_safe(priv_pem, password) do
-    # credo:disable-for-next-line Credo.Check.Readability.PreferImplicitTry
-    try do
-      {:ok, prepare_private_pem(priv_pem, password)}
-    rescue
-      err ->
-        {:error, %Error{message: "Invalid private key", op: :prepare_private_pem_safe, err: err}}
-    end
-  end
 
   defp atomic_write_file(path, content) do
     tmp = path <> ".tmp"
