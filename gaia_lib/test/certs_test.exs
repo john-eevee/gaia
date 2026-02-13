@@ -6,12 +6,9 @@ defmodule GaiaLib.CertsTest do
   alias GaiaLib.Certs.{
     CertConfig,
     CertificatePair,
-    ConfigValidationError,
-    CSRCertificate
+    CSRCertificate,
+    Error
   }
-
-  alias GaiaLib.Certs.CertificatePair, as: CertificateAuthority
-  alias GaiaLib.Certs.Error, as: Error
 
   describe "CertConfig.validate/2 - root_ca" do
     test "returns :ok with valid root CA config" do
@@ -344,7 +341,7 @@ defmodule GaiaLib.CertsTest do
       csr_config = %CertConfig{common_name: "server.example.com"}
       {:ok, csr} = Certs.create_csr(csr_config)
 
-      invalid_ca = %CertificateAuthority{
+      invalid_ca = %CertificatePair{
         certificate: "invalid cert",
         private_key: "invalid key"
       }
@@ -404,7 +401,7 @@ defmodule GaiaLib.CertsTest do
 
   describe "CertificateAuthority inspect" do
     test "redacts sensitive data in inspect" do
-      ca = %CertificateAuthority{
+      ca = %CertificatePair{
         certificate: "-----BEGIN CERTIFICATE-----\ndata\n-----END CERTIFICATE-----",
         private_key: "-----BEGIN PRIVATE KEY-----\ndata\n-----END PRIVATE KEY-----"
       }
@@ -416,7 +413,7 @@ defmodule GaiaLib.CertsTest do
     end
 
     test "shows nil for missing keys in inspect" do
-      ca = %CertificateAuthority{
+      ca = %CertificatePair{
         certificate: nil,
         private_key: nil
       }
