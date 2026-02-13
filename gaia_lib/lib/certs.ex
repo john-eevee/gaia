@@ -4,19 +4,17 @@ defmodule GaiaLib.Certs do
   and sign certificates using Ed25519 keys via the x509 library.
   """
 
-  alias GaiaLib.Certs.{
-    CertConfig,
-    CertificatePair,
-    ConfigValidationError,
-    CSRCertificate
-  }
-
+  alias GaiaLib.Certs.CertConfig
+  alias GaiaLib.Certs.CertificatePair
+  alias GaiaLib.Certs.ConfigValidationError
+  alias GaiaLib.Certs.CSRCertificate
   alias GaiaLib.CertsValidation
-
-  # Aliases for nested X509 modules used in this module (avoid fully-qualified
-  # nested module references throughout functions).
+  alias X509.Certificate
   alias X509.Certificate.Extension
   alias X509.Certificate.Validity
+  alias X509.CSR
+  alias X509.PublicKey
+  alias X509.PrivateKey
 
   @root_ca_validity_days 3650
   @key_curve :ed25519
@@ -177,9 +175,10 @@ defmodule GaiaLib.Certs do
     end
   end
 
+  @spec create_root_ca(CertConfig.t()) :: CertificatePair.t()
   def create_root_ca(config) do
     certificate = fn ->
-      private_key = X509.PrivateKey.new_ec(@key_curve)
+      private_key = PrivateKey.new_ec(@key_curve)
       rdn = CertConfig.to_rdn(config)
       serial = :crypto.strong_rand_bytes(16) |> :crypto.bytes_to_integer()
       validity = Validity.days_from_now(@root_ca_validity_days)
@@ -197,8 +196,8 @@ defmodule GaiaLib.Certs do
           ]
         )
 
-      certificate_pem = X509.Certificate.to_pem(certificate)
-      private_key_pem = X509.PrivateKey.to_pem(private_key)
+      certificate_pem = Certificate.to_pem(certificate)
+      private_key_pem = PrivateKey.to_pem(private_key)
 
       %CertificatePair{
         certificate: certificate_pem,
@@ -217,15 +216,15 @@ defmodule GaiaLib.Certs do
 
   def create_csr(config) do
     csr_fun = fn ->
-      private_key = X509.PrivateKey.new_ec(@key_curve)
+      private_key = PrivateKey.new_ec(@key_curve)
       rdn = CertConfig.to_rdn(config)
-      csr = X509.CSR.new(private_key, rdn)
-      csr_pem = X509.CSR.to_pem(csr)
-      private_key_pem = X509.PrivateKey.to_pem(private_key)
+      csr = CSR.new(private_key, rdn)
+      csr_pem = CSR.to_pem(csr)
+      private_key_pem = PrivateKey.to_pem(private_key)
 
       # Extract public key and encode to PEM using X509 helpers
-      pub = X509.CSR.public_key(csr)
-      pub_pem = X509.PublicKey.to_pem(pub)
+      pub = CSR.public_key(csr)
+      pub_pem = PublicKey.to_pem(pub)
 
       %CSRCertificate{csr: csr_pem, private_key: private_key_pem, public_key: pub_pem}
     end
@@ -252,25 +251,25 @@ defmodule GaiaLib.Certs do
 
   def sign_csr(csr_pem, root_ca, validity_days) when is_binary(csr_pem) do
     # Parse CSR
-    with {:ok, csr} <- X509.CSR.from_pem(csr_pem),
+    with {:ok, csr} <- CSR.from_pem(csr_pem),
          %{certificate: certificate_pem, private_key: private_key_pem} <- root_ca,
-         {:ok, ca_cert} <- X509.Certificate.from_pem(certificate_pem),
-         {:ok, ca_priv} <- X509.PrivateKey.from_pem(private_key_pem),
+         {:ok, ca_cert} <- Certificate.from_pem(certificate_pem),
+         {:ok, ca_priv} <- PrivateKey.from_pem(private_key_pem),
          true <- CertsValidation.root_ca?(ca_cert),
          true <- CertsValidation.certificate_matches_private_key?(ca_cert, ca_priv) do
-      pub = X509.CSR.public_key(csr)
-      subject = X509.CSR.subject(csr)
+      pub = CSR.public_key(csr)
+      subject = CSR.subject(csr)
       serial = :crypto.strong_rand_bytes(16) |> :crypto.bytes_to_integer()
       validity = Validity.days_from_now(validity_days)
 
       cert =
-        X509.Certificate.new(pub, subject, ca_cert, ca_priv,
+        Certificate.new(pub, subject, ca_cert, ca_priv,
           template: :server,
           serial: serial,
           validity: validity
         )
 
-      {:ok, X509.Certificate.to_pem(cert)}
+      {:ok, Certificate.to_pem(cert)}
     else
       {:error, {:malformed, _}} = err ->
         {:error, %Error{message: "Invalid CSR PEM", op: :sign_csr, err: err}}
@@ -296,15 +295,15 @@ defmodule GaiaLib.Certs do
   """
   def load_root_ca(cert_pem_or_der, priv_pem_or_der) do
     cert_result =
-      case X509.Certificate.from_pem(cert_pem_or_der) do
+      case Certificate.from_pem(cert_pem_or_der) do
         {:ok, cert} -> {:ok, cert}
-        {:error, _} -> X509.Certificate.from_der(cert_pem_or_der)
+        {:error, _} -> Certificate.from_der(cert_pem_or_der)
       end
 
     priv_result =
-      case X509.PrivateKey.from_pem(priv_pem_or_der) do
+      case PrivateKey.from_pem(priv_pem_or_der) do
         {:ok, priv} -> {:ok, priv}
-        {:error, _} -> X509.PrivateKey.from_der(priv_pem_or_der)
+        {:error, _} -> PrivateKey.from_der(priv_pem_or_der)
       end
 
     with {:ok, cert} <- cert_result,
@@ -313,8 +312,8 @@ defmodule GaiaLib.Certs do
          true <- CertsValidation.certificate_matches_private_key?(cert, priv) do
       {:ok,
        %CertificatePair{
-         certificate: X509.Certificate.to_pem(cert),
-         private_key: X509.PrivateKey.to_pem(priv)
+         certificate: Certificate.to_pem(cert),
+         private_key: PrivateKey.to_pem(priv)
        }}
     else
       {:error, _} = err ->
@@ -335,15 +334,15 @@ defmodule GaiaLib.Certs do
   """
   def load_root_ca(cert_pem_or_der, priv_pem_or_der, password) do
     cert_result =
-      case X509.Certificate.from_pem(cert_pem_or_der) do
+      case Certificate.from_pem(cert_pem_or_der) do
         {:ok, cert} -> {:ok, cert}
-        {:error, _} -> X509.Certificate.from_der(cert_pem_or_der)
+        {:error, _} -> Certificate.from_der(cert_pem_or_der)
       end
 
     priv_result =
-      case X509.PrivateKey.from_pem(priv_pem_or_der, password: password) do
+      case PrivateKey.from_pem(priv_pem_or_der, password: password) do
         {:ok, priv} -> {:ok, priv}
-        {:error, _} -> X509.PrivateKey.from_der(priv_pem_or_der)
+        {:error, _} -> PrivateKey.from_der(priv_pem_or_der)
       end
 
     with {:ok, cert} <- cert_result,
@@ -352,8 +351,8 @@ defmodule GaiaLib.Certs do
          true <- CertsValidation.certificate_matches_private_key?(cert, priv) do
       {:ok,
        %CertificatePair{
-         certificate: X509.Certificate.to_pem(cert),
-         private_key: X509.PrivateKey.to_pem(priv)
+         certificate: Certificate.to_pem(cert),
+         private_key: PrivateKey.to_pem(priv)
        }}
     else
       {:error, _} = err ->
@@ -408,12 +407,12 @@ defmodule GaiaLib.Certs do
 
   # Helpers extracted to reduce complexity of write_root_ca/3
   defp prepare_private_pem(priv_pem, password) when is_binary(password) do
-    case X509.PrivateKey.from_pem(priv_pem) do
+    case PrivateKey.from_pem(priv_pem) do
       {:ok, priv} ->
-        X509.PrivateKey.to_pem(priv, password: password)
+        PrivateKey.to_pem(priv, password: password)
 
       {:error, _} ->
-        case X509.PrivateKey.from_pem(priv_pem, password: password) do
+        case PrivateKey.from_pem(priv_pem, password: password) do
           {:ok, _priv} -> priv_pem
           {:error, _} -> priv_pem
         end
